@@ -10,16 +10,12 @@ import {
   Loader2,
 } from 'lucide-react'
 import Button from '../ui/Button'
+import { useEditor } from '../../contexts/EditorContext'
 
 /**
  * EditorToolbar — Action buttons and save status indicator.
  *
- * The status indicator replaces the old "Unsaved" dot with a
- * full status system: Unsaved, Saving, Saved, Save Failed.
- *
- * Save is enabled when:
- *   - isDirty is true (draft differs from stored note)
- *   - AND saveStatus is not 'saving' (prevent duplicate saves)
+ * Reads isDirty, saveStatus, onManualSave, and onDelete from EditorContext.
  */
 
 const ACTIONS = [
@@ -51,7 +47,8 @@ const STATUS_CONFIG = {
   },
 }
 
-export default function EditorToolbar({ isDirty, onSave, saveStatus, onDelete }) {
+export default function EditorToolbar() {
+  const { isDirty, saveStatus, onManualSave, onDelete } = useEditor()
   const isSaving = saveStatus === 'saving'
   const status = STATUS_CONFIG[saveStatus]
 
@@ -64,7 +61,7 @@ export default function EditorToolbar({ isDirty, onSave, saveStatus, onDelete })
         icon={Save}
         disabled={!isDirty || isSaving}
         loading={isSaving}
-        onClick={onSave}
+        onClick={onManualSave}
         title="Save changes (Ctrl+S)"
       >
         Save

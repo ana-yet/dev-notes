@@ -1,21 +1,16 @@
-import { useRef, useEffect, useCallback } from 'react'
+import { useEffect, useCallback } from 'react'
 import { Pin, Heart, Archive } from 'lucide-react'
+import { useEditor } from '../../contexts/EditorContext'
 
 /**
  * EditorHeader — Editable title with status badges.
  *
- * The title uses a textarea styled to look like a heading.
- * It auto-grows vertically when the title is very long.
- * The parent controls the title value and provides onTitleChange.
- *
- * Accepts an optional `titleRef` prop so the parent (NoteEditor)
- * can focus the title input programmatically (e.g. after creating
- * a new note). If not provided, creates an internal ref.
+ * Reads note, draftTitle, setDraftTitle, and titleRef from EditorContext.
+ * The title textarea auto-grows vertically. The titleRef enables
+ * programmatic focus (e.g. after creating a new note).
  */
-
-export default function EditorHeader({ note, title, onTitleChange, titleRef: externalRef }) {
-  const internalRef = useRef(null)
-  const titleRef = externalRef || internalRef
+export default function EditorHeader() {
+  const { note, draftTitle, setDraftTitle, titleRef } = useEditor()
 
   const adjustHeight = useCallback(() => {
     const el = titleRef.current
@@ -23,12 +18,11 @@ export default function EditorHeader({ note, title, onTitleChange, titleRef: ext
       el.style.height = 'auto'
       el.style.height = el.scrollHeight + 'px'
     }
-  }, [])
+  }, [titleRef])
 
-  // Adjust height when title changes (e.g. on note switch)
   useEffect(() => {
     adjustHeight()
-  }, [title, adjustHeight])
+  }, [draftTitle, adjustHeight])
 
   return (
     <div className="px-5 pt-5 pb-3">
@@ -57,8 +51,8 @@ export default function EditorHeader({ note, title, onTitleChange, titleRef: ext
       {/* Editable title */}
       <textarea
         ref={titleRef}
-        value={title}
-        onChange={(e) => onTitleChange(e.target.value)}
+        value={draftTitle}
+        onChange={(e) => setDraftTitle(e.target.value)}
         placeholder="Untitled Note"
         rows={1}
         className="w-full text-xl font-bold text-gray-900 dark:text-white bg-transparent border-none outline-none resize-none leading-tight placeholder-gray-300 dark:placeholder-gray-600 overflow-hidden"

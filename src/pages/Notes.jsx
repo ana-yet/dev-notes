@@ -6,6 +6,7 @@ import NotesToolbar from '../components/notes/NotesToolbar'
 import NotesFilters from '../components/notes/NotesFilters'
 import NotesList from '../components/notes/NotesList'
 import NoteEditor from '../components/editor/NoteEditor'
+import { EditorProvider } from '../contexts/EditorContext'
 import { useNotes } from '../hooks/useNotes'
 import { useFolders } from '../hooks/useFolders'
 import logger from '../utils/logger'
@@ -238,14 +239,16 @@ export default function Notes() {
 
         {/* Right panel — editor */}
         <div className="flex-1 overflow-y-auto border-t min-[640px]:border-t-0 border-gray-200 dark:border-gray-800 relative">
-          <NoteEditor
+          <EditorProvider
             note={selectedNote}
             folderName={selectedFolderName}
-            onDirtyChange={setIsEditorDirty}
             onSave={handleSave}
-            autoFocusTitle={autoFocusTitle}
             onDelete={handleDeleteRequest}
-          />
+            onDirtyChange={setIsEditorDirty}
+            autoFocusTitle={autoFocusTitle}
+          >
+            <NoteEditor />
+          </EditorProvider>
           {/* Save error toast — positioned at bottom of editor */}
           {saveError && (
             <div className="sticky bottom-4 mx-4 z-10">

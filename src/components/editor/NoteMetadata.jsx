@@ -1,14 +1,17 @@
 import { Calendar, Clock, Folder, Tag } from 'lucide-react'
 import { formatDate, formatTime } from '../../utils/date'
+import { useEditor } from '../../contexts/EditorContext'
 
 /**
  * NoteMetadata — Displays metadata below the note content.
  *
+ * Reads note and folderName from EditorContext.
  * Shows created/updated dates, folder name, and tags.
- * Purely presentational — no interactions.
  */
 
-export default function NoteMetadata({ note, folderName }) {
+export default function NoteMetadata() {
+  const { note, folderName } = useEditor()
+
   return (
     <div className="px-5 py-4 border-t border-gray-100 dark:border-gray-800/50 space-y-3">
       {/* Dates */}
