@@ -1,24 +1,27 @@
-import { useCallback, useState, useMemo } from 'react'
-import { FileText } from 'lucide-react'
+import { useCallback, useState, useMemo, useRef } from 'react'
 import { PageHeader } from '../components/ui'
+import ConfirmDialog from '../components/ui/ConfirmDialog'
 import NotesToolbar from '../components/notes/NotesToolbar'
 import NotesFilters from '../components/notes/NotesFilters'
 import NotesList from '../components/notes/NotesList'
 import NoteEditor from '../components/editor/NoteEditor'
 import { useNotes } from '../hooks/useNotes'
 import { useFolders } from '../hooks/useFolders'
+import logger from '../utils/logger'
+
+const log = logger.create('Notes')
 
 /**
  * Notes — Main note-taking page with split layout.
  *
- * Left panel: notes list with toolbar and filters.
- * Right panel: note editor (read-only for now).
+ * Manages the relationship between the list and editor:
+ *   - Tracks which note is selected.
+ *   - Protects against switching notes with unsaved changes.
+ *   - Provides a placeholder save handler (no storage writes yet).
  *
- * The selected note is tracked by ID in local state.
- * When a NoteCard is clicked, it becomes selected and
- * its content appears in the editor panel.
- *
- * On narrow screens (< 640px), the panels stack vertically.
+ * The editor reports its dirty state via onDirtyChange.
+ * The page uses that to decide whether to show a confirmation
+ * dialog before allowing a note switch.
  */
 export default function Notes() {
   const { notes, loading, error, searchNotes } = useNotes()
@@ -27,7 +30,11 @@ export default function Notes() {
   const [searchResults, setSearchResults] = useState(null)
   const [searchActive, setSearchActive] = useState(false)
   const [selectedNoteId, setSelectedNoteId] = useState(null)
+  const [isEditorDirty, setIsEditorDirty] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
+  const pendingSwitchIdRef = useRef(null)
 
+  // ── Search ─────────────────────────────────────────────────
   const handleSearch = useCallback(
     async (query) => {
       if (!query || !query.trim()) {
@@ -45,11 +52,46 @@ export default function Notes() {
     [searchNotes]
   )
 
-  // Display search results when searching, otherwise show all notes
+  // ── Note selection with dirty check ────────────────────────
+  const handleSelectNote = useCallback(
+    (noteId) => {
+      if (noteId === selectedNoteId) return
+
+      if (isEditorDirty) {
+        pendingSwitchIdRef.current = noteId
+        setShowConfirm(true)
+      } else {
+        setSelectedNoteId(noteId)
+      }
+    },
+    [selectedNoteId, isEditorDirty]
+  )
+
+  const handleConfirmDiscard = () => {
+    setShowConfirm(false)
+    const pendingId = pendingSwitchIdRef.current
+    pendingSwitchIdRef.current = null
+    if (pendingId) setSelectedNoteId(pendingId)
+  }
+
+  const handleConfirmCancel = () => {
+    setShowConfirm(false)
+    pendingSwitchIdRef.current = null
+  }
+
+  // ── Save handler (placeholder — no storage writes) ─────────
+  const handleSave = useCallback(({ title, content }) => {
+    log.info('Save triggered (placeholder)', {
+      title: title.slice(0, 50),
+      contentLength: content.length,
+    })
+    // Will call updateNote() in the next milestone.
+  }, [])
+
+  // ── Derived data ───────────────────────────────────────────
   const displayNotes = searchActive ? searchResults : notes
   const noteCount = searchActive ? searchResults?.length : notes.length
 
-  // Find the selected note and its folder name
   const selectedNote = useMemo(
     () => (displayNotes || []).find((n) => n.id === selectedNoteId) || null,
     [displayNotes, selectedNoteId]
@@ -97,15 +139,31 @@ export default function Notes() {
             loading={loading}
             error={error}
             selectedNoteId={selectedNoteId}
-            onSelectNote={setSelectedNoteId}
+            onSelectNote={handleSelectNote}
           />
         </div>
 
         {/* Right panel — editor */}
         <div className="flex-1 overflow-y-auto border-t min-[640px]:border-t-0 border-gray-200 dark:border-gray-800">
-          <NoteEditor note={selectedNote} folderName={selectedFolderName} />
+          <NoteEditor
+            note={selectedNote}
+            folderName={selectedFolderName}
+            onDirtyChange={setIsEditorDirty}
+            onSave={handleSave}
+          />
         </div>
       </div>
+
+      {/* Unsaved changes confirmation */}
+      {showConfirm && (
+        <ConfirmDialog
+          title="Unsaved Changes"
+          message="You have unsaved changes. Discard them?"
+          confirmLabel="Discard"
+          onConfirm={handleConfirmDiscard}
+          onCancel={handleConfirmCancel}
+        />
+      )}
     </div>
   )
 }

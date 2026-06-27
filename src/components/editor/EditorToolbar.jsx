@@ -1,5 +1,4 @@
 import {
-  Pencil,
   Save,
   Trash2,
   Archive,
@@ -10,26 +9,47 @@ import {
 import Button from '../ui/Button'
 
 /**
- * EditorToolbar — Action buttons for the selected note.
+ * EditorToolbar — Action buttons and dirty-state indicator.
  *
- * All buttons are disabled placeholders. They will become functional
- * when CRUD is implemented in a future milestone.
- *
- * Layout: primary actions on the left, destructive on the right.
+ * Save is enabled only when `isDirty` is true.
+ * Other buttons remain disabled placeholders.
+ * Shows a pulsing "Unsaved Changes" indicator when dirty.
  */
 
 const ACTIONS = [
-  { icon: Pencil, label: 'Edit', variant: 'ghost', title: 'Edit note' },
-  { icon: Save, label: 'Save', variant: 'ghost', title: 'Save changes' },
   { icon: Heart, label: 'Favorite', variant: 'ghost', title: 'Toggle favorite' },
   { icon: Pin, label: 'Pin', variant: 'ghost', title: 'Toggle pin' },
   { icon: Archive, label: 'Archive', variant: 'ghost', title: 'Archive note' },
   { icon: Share2, label: 'Share', variant: 'ghost', title: 'Share note' },
 ]
 
-export default function EditorToolbar() {
+export default function EditorToolbar({ isDirty, onSave }) {
   return (
     <div className="flex items-center gap-1 px-5 py-2 border-b border-gray-100 dark:border-gray-800/50 overflow-x-auto">
+      {/* Save — primary when dirty, ghost when clean */}
+      <Button
+        variant={isDirty ? 'primary' : 'ghost'}
+        size="sm"
+        icon={Save}
+        disabled={!isDirty}
+        onClick={onSave}
+        title="Save changes (Ctrl+S)"
+      >
+        Save
+      </Button>
+
+      {/* Dirty indicator */}
+      {isDirty && (
+        <span className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 ml-1 mr-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+          Unsaved
+        </span>
+      )}
+
+      {/* Divider */}
+      <div className="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-1" />
+
+      {/* Action buttons — disabled placeholders */}
       {ACTIONS.map(({ icon, label, variant, title }) => (
         <Button
           key={label}

@@ -1,13 +1,30 @@
+import { useRef, useEffect, useCallback } from 'react'
 import { Pin, Heart, Archive } from 'lucide-react'
 
 /**
- * EditorHeader — Displays the note title with status badges.
+ * EditorHeader — Editable title with status badges.
  *
- * Shows pin, favorite, and archive indicators next to the title
- * so the user can see the note's status at a glance.
+ * The title uses a textarea styled to look like a heading.
+ * It auto-grows vertically when the title is very long.
+ * The parent controls the title value and provides onTitleChange.
  */
 
-export default function EditorHeader({ note }) {
+export default function EditorHeader({ note, title, onTitleChange }) {
+  const titleRef = useRef(null)
+
+  const adjustHeight = useCallback(() => {
+    const el = titleRef.current
+    if (el) {
+      el.style.height = 'auto'
+      el.style.height = el.scrollHeight + 'px'
+    }
+  }, [])
+
+  // Adjust height when title changes (e.g. on note switch)
+  useEffect(() => {
+    adjustHeight()
+  }, [title, adjustHeight])
+
   return (
     <div className="px-5 pt-5 pb-3">
       {/* Status badges */}
@@ -32,10 +49,15 @@ export default function EditorHeader({ note }) {
         )}
       </div>
 
-      {/* Title */}
-      <h1 className="text-xl font-bold text-gray-900 dark:text-white leading-tight">
-        {note.title || 'Untitled'}
-      </h1>
+      {/* Editable title */}
+      <textarea
+        ref={titleRef}
+        value={title}
+        onChange={(e) => onTitleChange(e.target.value)}
+        placeholder="Untitled Note"
+        rows={1}
+        className="w-full text-xl font-bold text-gray-900 dark:text-white bg-transparent border-none outline-none resize-none leading-tight placeholder-gray-300 dark:placeholder-gray-600 overflow-hidden"
+      />
 
       {/* Color indicator */}
       {note.color && (
