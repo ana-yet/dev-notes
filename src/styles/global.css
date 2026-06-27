@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+/* ============================================================
+   DevNotes — Global Styles
+   
+   Tailwind v4 uses CSS-based configuration. Custom theme values
+   are defined with @theme. Base styles go in @layer base.
+   ============================================================ */
+
+@layer base {
+  body {
+    margin: 0;
+    min-width: 320px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+      "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Remove default focus outlines, add accessible ring */
+  *:focus-visible {
+    @apply outline-2 outline-offset-2 outline-violet-500;
+  }
+}
+
+/* Custom scrollbar for the extension UI */
+@layer base {
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
+  }
+
+  /* Dark mode scrollbars */
+  .dark ::-webkit-scrollbar-thumb {
+    background: #4b5563;
+  }
+
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: #6b7280;
+  }
+}
