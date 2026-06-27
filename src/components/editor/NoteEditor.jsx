@@ -4,39 +4,44 @@ import EditorHeader from './EditorHeader'
 import EditorToolbar from './EditorToolbar'
 import EditorContent from './EditorContent'
 import NoteMetadata from './NoteMetadata'
+import { useAutosave } from '../../hooks/useAutosave'
+import { LIMITS } from '../../constants'
 
 /**
- * NoteEditor — Editable note panel with local draft state.
+ * NoteEditor — Editable note panel with autosave.
  *
  * Architecture:
  *   - Draft state (title, content) lives here as local React state.
- *   - The original note from the repository is compared to the draft
- *     to compute `isDirty`. The repository is NEVER written to directly.
- *   - The parent receives `onDirtyChange(isDirty)` so it can protect
- *     against accidental navigation.
- *   - `onSave(draft)` is called when the user clicks Save or presses
- *     Ctrl/Cmd+S. The parent decides what to do with it (for now: nothing).
+ *   - The useAutosave hook manages debounced saves. Every draft change
+ *     resets the 800ms timer. When the user stops typing, the hook
+ *     calls onSave (the same function used by manual save).
+ *   - Ctrl/Cmd+S and the Save button cancel the timer and save immediately.
+ *   - The parent provides onSave and receives onDirtyChange.
  *
- * Why local draft state?
- *   Typing should not trigger repository writes. The draft is the source
- *   of truth while editing. Only explicit save actions (Ctrl+S, Save btn)
- *   should flush to the repository. This design naturally supports:
- *     - Autosave (just call onSave on a timer)
- *     - Undo (track draft history)
- *     - Conflict detection (compare draft timestamp vs repository timestamp)
+ * Why autosave lives in a hook, not the component?
+ *   Timer logic (debounce, cancel, queue, cleanup) is complex and
+ *   reusable. Extracting it into useAutosave keeps the editor
+ *   focused on rendering and state management.
  */
 
-export default function NoteEditor({ note, folderName, onDirtyChange, onSave, saving }) {
+export default function NoteEditor({ note, folderName, onDirtyChange, onSave }) {
   const [draftTitle, setDraftTitle] = useState('')
   const [draftContent, setDraftContent] = useState('')
 
+  // ── Autosave hook ──────────────────────────────────────────
+  const autosave = useAutosave({
+    onSave,
+    delay: LIMITS.AUTOSAVE_DELAY_MS,
+  })
+
   // ── Sync draft when the selected note changes ──────────────
-  // Only depends on note.id so editing doesn't re-sync mid-type.
   useEffect(() => {
     if (note) {
       setDraftTitle(note.title || '')
       setDraftContent(note.content || '')
+      autosave.cancel() // Cancel any pending save from the previous note
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [note?.id])
 
   // ── Compute dirty state ────────────────────────────────────
@@ -53,23 +58,31 @@ export default function NoteEditor({ note, folderName, onDirtyChange, onSave, sa
     onDirtyChange?.(isDirty)
   }, [isDirty, onDirtyChange])
 
-  // ── Save handler ───────────────────────────────────────────
-  const handleSave = useCallback(() => {
+  // ── Schedule autosave when draft changes ────────────────────
+  useEffect(() => {
+    if (isDirty) {
+      autosave.schedule({ title: draftTitle, content: draftContent })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftTitle, draftContent, isDirty])
+
+  // ── Manual save — cancels autosave timer, saves now ─────────
+  const handleManualSave = useCallback(() => {
     if (!isDirty) return
-    onSave?.({ title: draftTitle, content: draftContent })
-  }, [isDirty, draftTitle, draftContent, onSave])
+    autosave.saveNow({ title: draftTitle, content: draftContent })
+  }, [isDirty, draftTitle, draftContent, autosave])
 
   // ── Ctrl/Cmd + S keyboard shortcut ─────────────────────────
   useEffect(() => {
     const handler = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault()
-        handleSave()
+        handleManualSave()
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [handleSave])
+  }, [handleManualSave])
 
   // ── No note selected ───────────────────────────────────────
   if (!note) {
@@ -84,7 +97,11 @@ export default function NoteEditor({ note, folderName, onDirtyChange, onSave, sa
         onTitleChange={setDraftTitle}
       />
 
-      <EditorToolbar isDirty={isDirty} onSave={handleSave} saving={saving} />
+      <EditorToolbar
+        isDirty={isDirty}
+        onSave={handleManualSave}
+        saveStatus={autosave.saveStatus}
+      />
 
       <div className="flex-1 overflow-y-auto">
         <EditorContent content={draftContent} onChange={setDraftContent} />

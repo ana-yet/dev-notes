@@ -33,7 +33,6 @@ export default function Notes() {
   const [selectedNoteId, setSelectedNoteId] = useState(null)
   const [isEditorDirty, setIsEditorDirty] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
-  const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
   const pendingSwitchIdRef = useRef(null)
 
@@ -82,10 +81,10 @@ export default function Notes() {
     pendingSwitchIdRef.current = null
   }
 
-  // ── Save handler — validates, updates repository, handles errors ──
+  // ── Save handler — validates, updates repository, returns result ──
   const handleSave = useCallback(
     async ({ title, content }) => {
-      if (!selectedNoteId || saving) return
+      if (!selectedNoteId) return { error: 'No note selected' }
 
       // Validate: trim title, default to "Untitled Note" if empty
       const trimmedTitle = title.trim()
@@ -99,10 +98,9 @@ export default function Notes() {
         finalContent === (selectedNote.content || '')
       ) {
         log.info('Save skipped — no changes after trimming')
-        return
+        return { data: null, error: null }
       }
 
-      setSaving(true)
       setSaveError(null)
 
       const { data, error: err } = await updateNote(selectedNoteId, {
@@ -110,16 +108,16 @@ export default function Notes() {
         content: finalContent,
       })
 
-      setSaving(false)
-
       if (err) {
         log.error('Save failed:', err)
         setSaveError(err)
       } else {
         log.info('Note saved:', selectedNoteId)
       }
+
+      return { data, error: err }
     },
-    [selectedNoteId, selectedNote, saving, updateNote]
+    [selectedNoteId, selectedNote, updateNote]
   )
 
   // ── Derived data ───────────────────────────────────────────
@@ -184,7 +182,6 @@ export default function Notes() {
             folderName={selectedFolderName}
             onDirtyChange={setIsEditorDirty}
             onSave={handleSave}
-            saving={saving}
           />
           {/* Save error toast — positioned at bottom of editor */}
           {saveError && (

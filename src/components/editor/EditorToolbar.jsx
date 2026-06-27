@@ -5,15 +5,21 @@ import {
   Heart,
   Pin,
   Share2,
+  Check,
+  AlertCircle,
+  Loader2,
 } from 'lucide-react'
 import Button from '../ui/Button'
 
 /**
- * EditorToolbar — Action buttons and dirty-state indicator.
+ * EditorToolbar — Action buttons and save status indicator.
  *
- * Save is enabled only when `isDirty` is true.
- * Other buttons remain disabled placeholders.
- * Shows a pulsing "Unsaved Changes" indicator when dirty.
+ * The status indicator replaces the old "Unsaved" dot with a
+ * full status system: Unsaved, Saving, Saved, Save Failed.
+ *
+ * Save is enabled when:
+ *   - isDirty is true (draft differs from stored note)
+ *   - AND saveStatus is not 'saving' (prevent duplicate saves)
  */
 
 const ACTIONS = [
@@ -23,28 +29,65 @@ const ACTIONS = [
   { icon: Share2, label: 'Share', variant: 'ghost', title: 'Share note' },
 ]
 
-export default function EditorToolbar({ isDirty, onSave, saving }) {
+/** Status display config — maps status to icon, text, and color. */
+const STATUS_CONFIG = {
+  saving: {
+    icon: Loader2,
+    text: 'Saving...',
+    color: 'text-blue-600 dark:text-blue-400',
+    animate: true,
+  },
+  saved: {
+    icon: Check,
+    text: 'Saved',
+    color: 'text-green-600 dark:text-green-400',
+    animate: false,
+  },
+  failed: {
+    icon: AlertCircle,
+    text: 'Save Failed',
+    color: 'text-red-600 dark:text-red-400',
+    animate: false,
+  },
+}
+
+export default function EditorToolbar({ isDirty, onSave, saveStatus }) {
+  const isSaving = saveStatus === 'saving'
+  const status = STATUS_CONFIG[saveStatus]
+
   return (
     <div className="flex items-center gap-1 px-5 py-2 border-b border-gray-100 dark:border-gray-800/50 overflow-x-auto">
-      {/* Save — primary when dirty, ghost when clean, spinner when saving */}
+      {/* Save button */}
       <Button
-        variant={isDirty && !saving ? 'primary' : 'ghost'}
+        variant={isDirty && !isSaving ? 'primary' : 'ghost'}
         size="sm"
         icon={Save}
-        disabled={!isDirty || saving}
-        loading={saving}
+        disabled={!isDirty || isSaving}
+        loading={isSaving}
         onClick={onSave}
         title="Save changes (Ctrl+S)"
       >
-        {saving ? 'Saving...' : 'Save'}
+        Save
       </Button>
 
-      {/* Dirty indicator — hidden during save */}
-      {isDirty && !saving && (
-        <span className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 ml-1 mr-2">
-          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-          Unsaved
+      {/* Status indicator */}
+      {status ? (
+        <span
+          className={`flex items-center gap-1.5 text-xs ml-1 mr-2 ${status.color}`}
+        >
+          <status.icon
+            size={13}
+            className={status.animate ? 'animate-spin' : ''}
+          />
+          {status.text}
         </span>
+      ) : (
+        isDirty && (
+          <span className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 ml-1 mr-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+            Unsaved
+          </span>
+        )
       )}
 
       {/* Divider */}
