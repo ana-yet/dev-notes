@@ -1,4 +1,4 @@
-import { useCallback, useState, useMemo, useRef } from 'react'
+import { useCallback, useState, useMemo, useRef, useEffect } from 'react'
 import { PageHeader } from '../components/ui'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
 import Toast from '../components/ui/Toast'
@@ -25,7 +25,7 @@ const log = logger.create('Notes')
  * dialog before allowing a note switch.
  */
 export default function Notes() {
-  const { notes, loading, error, searchNotes, updateNote } = useNotes()
+  const { notes, loading, error, searchNotes, updateNote, createNote } = useNotes()
   const { folders } = useFolders()
 
   const [searchResults, setSearchResults] = useState(null)
@@ -34,6 +34,8 @@ export default function Notes() {
   const [isEditorDirty, setIsEditorDirty] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [saveError, setSaveError] = useState(null)
+  const [creating, setCreating] = useState(false)
+  const [autoFocusTitle, setAutoFocusTitle] = useState(false)
   const pendingSwitchIdRef = useRef(null)
 
   // ── Search ─────────────────────────────────────────────────
@@ -53,6 +55,45 @@ export default function Notes() {
     },
     [searchNotes]
   )
+
+  // ── Create note ────────────────────────────────────────────
+  const handleCreateNote = useCallback(async () => {
+    if (creating) return
+
+    setCreating(true)
+    setSaveError(null)
+
+    const { data, error: err } = await createNote({
+      title: 'Untitled Note',
+      content: '',
+    })
+
+    setCreating(false)
+
+    if (err) {
+      log.error('Create failed:', err)
+      setSaveError(err)
+      return
+    }
+
+    // Select the new note and focus the title
+    setSelectedNoteId(data.id)
+    setAutoFocusTitle(true)
+    // Reset after a delay — NoteEditor uses this flag to focus the title
+    setTimeout(() => setAutoFocusTitle(false), 200)
+  }, [creating, createNote])
+
+  // ── Ctrl/Cmd + N keyboard shortcut ─────────────────────────
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+        e.preventDefault()
+        handleCreateNote()
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [handleCreateNote])
 
   // ── Note selection with dirty check ────────────────────────
   const handleSelectNote = useCallback(
@@ -156,7 +197,7 @@ export default function Notes() {
       </div>
 
       {/* Toolbar with search */}
-      <NotesToolbar onSearch={handleSearch} />
+      <NotesToolbar onSearch={handleSearch} onCreateNote={handleCreateNote} creating={creating} />
 
       {/* Filter chips */}
       <NotesFilters />
@@ -172,6 +213,7 @@ export default function Notes() {
             error={error}
             selectedNoteId={selectedNoteId}
             onSelectNote={handleSelectNote}
+            onCreateNote={handleCreateNote}
           />
         </div>
 
@@ -182,6 +224,7 @@ export default function Notes() {
             folderName={selectedFolderName}
             onDirtyChange={setIsEditorDirty}
             onSave={handleSave}
+            autoFocusTitle={autoFocusTitle}
           />
           {/* Save error toast — positioned at bottom of editor */}
           {saveError && (

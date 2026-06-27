@@ -1,22 +1,23 @@
-import { FileText } from 'lucide-react'
+import { FileText, Plus } from 'lucide-react'
 import NoteCard from './NoteCard'
 import EmptyState from '../ui/EmptyState'
 import LoadingState from '../ui/LoadingState'
+import Button from '../ui/Button'
 
 /**
  * NotesList — Renders a responsive grid of NoteCards.
  *
- * Handles three states internally:
+ * Handles four states internally:
  *   1. Loading  → spinner
  *   2. Error    → error message
- *   3. Empty    → empty state with icon
+ *   3. Empty    → empty state with "Create Note" action
  *   4. Data     → grid of cards
  *
  * The parent passes notes, loading, error, and a folder lookup map.
  * This component is purely presentational — it never fetches data.
  */
 
-export default function NotesList({ notes, folders, loading, error, selectedNoteId, onSelectNote }) {
+export default function NotesList({ notes, folders, loading, error, selectedNoteId, onSelectNote, onCreateNote }) {
   // ── Loading ────────────────────────────────────────────────
   if (loading) {
     return <LoadingState message="Loading notes..." />
@@ -45,6 +46,13 @@ export default function NotesList({ notes, folders, loading, error, selectedNote
         icon={FileText}
         title="No notes yet"
         description="Create your first note to get started."
+        action={
+          onCreateNote && (
+            <Button icon={Plus} size="sm" onClick={onCreateNote}>
+              Create Note
+            </Button>
+          )
+        }
       />
     )
   }

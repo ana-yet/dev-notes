@@ -8,13 +8,11 @@ import { LIMITS } from '../../constants'
  * NotesToolbar — Controls above the notes list.
  *
  * Search is functional — it calls onSearch with a debounced query.
- * Sort, Filter, and New Note are visual placeholders.
- *
- * The search state is managed internally so the parent only
- * receives the debounced value via onSearch.
+ * Sort and Filter are visual placeholders.
+ * New Note calls onCreateNote and shows a spinner while creating.
  */
 
-export default function NotesToolbar({ onSearch }) {
+export default function NotesToolbar({ onSearch, onCreateNote, creating }) {
   const [query, setQuery] = useState('')
 
   // Debounce the search callback
@@ -62,8 +60,15 @@ export default function NotesToolbar({ onSearch }) {
         title="Filter (coming soon)"
       />
 
-      {/* New Note — disabled until editor is built */}
-      <Button icon={Plus} size="sm" disabled title="New Note (coming soon)">
+      {/* New Note */}
+      <Button
+        icon={Plus}
+        size="sm"
+        loading={creating}
+        disabled={creating}
+        onClick={onCreateNote}
+        title="New Note (Ctrl+N)"
+      >
         New
       </Button>
     </div>

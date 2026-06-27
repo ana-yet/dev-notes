@@ -7,10 +7,15 @@ import { Pin, Heart, Archive } from 'lucide-react'
  * The title uses a textarea styled to look like a heading.
  * It auto-grows vertically when the title is very long.
  * The parent controls the title value and provides onTitleChange.
+ *
+ * Accepts an optional `titleRef` prop so the parent (NoteEditor)
+ * can focus the title input programmatically (e.g. after creating
+ * a new note). If not provided, creates an internal ref.
  */
 
-export default function EditorHeader({ note, title, onTitleChange }) {
-  const titleRef = useRef(null)
+export default function EditorHeader({ note, title, onTitleChange, titleRef: externalRef }) {
+  const internalRef = useRef(null)
+  const titleRef = externalRef || internalRef
 
   const adjustHeight = useCallback(() => {
     const el = titleRef.current
