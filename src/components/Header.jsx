@@ -19,6 +19,7 @@ const PAGE_TITLES = {
   '/highlights': 'Highlights',
   '/bookmarks': 'Bookmarks',
   '/settings': 'Settings',
+  '/trash': 'Trash',
 }
 
 const THEME_META = {

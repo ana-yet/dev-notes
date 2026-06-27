@@ -11,13 +11,19 @@ import { seedIfNeeded } from '../repositories/seed'
  * Components should NEVER call NoteRepository directly — they use
  * this hook, which handles state synchronization automatically.
  *
- * Usage:
- *   const { notes, loading, error, createNote, updateNote, deleteNote, refresh } = useNotes()
+ * Provides two derived arrays:
+ *   - notes: active notes (not deleted)
+ *   - deletedNotes: notes in Trash
  */
 export function useNotes() {
-  const [notes, setNotes] = useState([])
+  const [allNotes, setAllNotes] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+
+  // Derived: active notes (not in trash)
+  const notes = allNotes.filter((n) => !n.isDeleted)
+  // Derived: notes in trash
+  const deletedNotes = allNotes.filter((n) => n.isDeleted)
 
   /**
    * Loads all notes from the repository.
@@ -31,7 +37,7 @@ export function useNotes() {
     await seedIfNeeded()
 
     const { data, error: err } = await NoteRepository.getAll()
-    setNotes(data)
+    setAllNotes(data)
     setError(err)
     setLoading(false)
   }, [])
@@ -60,6 +66,15 @@ export function useNotes() {
 
   const deleteNote = useCallback(
     async (id) => {
+      const { data: note, error: err } = await NoteRepository.trash(id)
+      if (!err) await refresh()
+      return { data: note, error: err }
+    },
+    [refresh]
+  )
+
+  const permanentDeleteNote = useCallback(
+    async (id) => {
       const { data: ok, error: err } = await NoteRepository.remove(id)
       if (!err) await refresh()
       return { data: ok, error: err }
@@ -84,6 +99,21 @@ export function useNotes() {
     },
     [refresh]
   )
+
+  const restoreFromTrash = useCallback(
+    async (id) => {
+      const { data: note, error: err } = await NoteRepository.restoreFromTrash(id)
+      if (!err) await refresh()
+      return { data: note, error: err }
+    },
+    [refresh]
+  )
+
+  const emptyTrash = useCallback(async () => {
+    const { data: count, error: err } = await NoteRepository.emptyTrash()
+    if (!err) await refresh()
+    return { data: count, error: err }
+  }, [refresh])
 
   const togglePin = useCallback(
     async (id) => {
@@ -116,13 +146,17 @@ export function useNotes() {
 
   return {
     notes,
+    deletedNotes,
     loading,
     error,
     createNote,
     updateNote,
     deleteNote,
+    permanentDeleteNote,
     archiveNote,
     restoreNote,
+    restoreFromTrash,
+    emptyTrash,
     togglePin,
     toggleFavorite,
     searchNotes,

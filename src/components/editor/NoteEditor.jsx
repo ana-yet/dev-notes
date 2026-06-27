@@ -24,7 +24,7 @@ import { LIMITS } from '../../constants'
  *     the user can immediately start typing a new title.
  */
 
-export default function NoteEditor({ note, folderName, onDirtyChange, onSave, autoFocusTitle }) {
+export default function NoteEditor({ note, folderName, onDirtyChange, onSave, autoFocusTitle, onDelete }) {
   const [draftTitle, setDraftTitle] = useState('')
   const [draftContent, setDraftContent] = useState('')
   const titleRef = useRef(null)
@@ -97,6 +97,19 @@ export default function NoteEditor({ note, folderName, onDirtyChange, onSave, au
     return () => window.removeEventListener('keydown', handler)
   }, [handleManualSave])
 
+  // ── Delete key shortcut ────────────────────────────────────
+  useEffect(() => {
+    const handler = (e) => {
+      // Only trigger on Delete key when not typing in an input/textarea
+      if (e.key === 'Delete' && !['INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
+        e.preventDefault()
+        onDelete?.()
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onDelete])
+
   // ── No note selected ───────────────────────────────────────
   if (!note) {
     return <EditorPlaceholder />
@@ -115,6 +128,7 @@ export default function NoteEditor({ note, folderName, onDirtyChange, onSave, au
         isDirty={isDirty}
         onSave={handleManualSave}
         saveStatus={autosave.saveStatus}
+        onDelete={onDelete}
       />
 
       <div className="flex-1 overflow-y-auto">

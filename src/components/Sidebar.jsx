@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   StickyNote,
+  Trash2,
 } from 'lucide-react'
 
 /**
@@ -32,6 +33,7 @@ const NAV_ITEMS = [
   { to: '/highlights', icon: Highlighter, label: 'Highlights' },
   { to: '/bookmarks', icon: Bookmark, label: 'Bookmarks' },
   { to: '/settings', icon: Settings, label: 'Settings' },
+  { to: '/trash', icon: Trash2, label: 'Trash', section: 'bottom' },
 ]
 
 export default function Sidebar({ collapsed, onToggle }) {
@@ -53,11 +55,36 @@ export default function Sidebar({ collapsed, onToggle }) {
 
       {/* ── Navigation ──────────────────────────────────────── */}
       <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
-        {NAV_ITEMS.map(({ to, icon: Icon, label }) => (
+        {NAV_ITEMS.filter((item) => !item.section).map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}
             to={to}
             end={to === '/'}
+            title={collapsed ? label : undefined}
+            className={({ isActive }) =>
+              `flex items-center gap-3 rounded-lg text-sm transition-colors ${
+                collapsed ? 'justify-center px-0 py-2' : 'px-3 py-2'
+              } ${
+                isActive
+                  ? 'bg-violet-50 text-violet-700 font-medium dark:bg-violet-950/40 dark:text-violet-400'
+                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'
+              }`
+            }
+          >
+            <Icon size={18} className="shrink-0" />
+            {!collapsed && <span className="whitespace-nowrap">{label}</span>}
+          </NavLink>
+        ))}
+
+        {/* Divider before bottom items */}
+        {!collapsed && (
+          <div className="my-2 border-t border-gray-100 dark:border-gray-800" />
+        )}
+
+        {NAV_ITEMS.filter((item) => item.section === 'bottom').map(({ to, icon: Icon, label }) => (
+          <NavLink
+            key={to}
+            to={to}
             title={collapsed ? label : undefined}
             className={({ isActive }) =>
               `flex items-center gap-3 rounded-lg text-sm transition-colors ${

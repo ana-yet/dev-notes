@@ -15,6 +15,7 @@ export const ROUTES = {
   HIGHLIGHTS: '/highlights',
   BOOKMARKS: '/bookmarks',
   SETTINGS: '/settings',
+  TRASH: '/trash',
 }
 
 /** Human-readable labels keyed by route path. */
@@ -27,4 +28,5 @@ export const ROUTE_LABELS = {
   [ROUTES.HIGHLIGHTS]: 'Highlights',
   [ROUTES.BOOKMARKS]: 'Bookmarks',
   [ROUTES.SETTINGS]: 'Settings',
+  [ROUTES.TRASH]: 'Trash',
 }

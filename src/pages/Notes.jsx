@@ -25,7 +25,7 @@ const log = logger.create('Notes')
  * dialog before allowing a note switch.
  */
 export default function Notes() {
-  const { notes, loading, error, searchNotes, updateNote, createNote } = useNotes()
+  const { notes, loading, error, searchNotes, updateNote, createNote, deleteNote } = useNotes()
   const { folders } = useFolders()
 
   const [searchResults, setSearchResults] = useState(null)
@@ -36,6 +36,7 @@ export default function Notes() {
   const [saveError, setSaveError] = useState(null)
   const [creating, setCreating] = useState(false)
   const [autoFocusTitle, setAutoFocusTitle] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const pendingSwitchIdRef = useRef(null)
 
   // ── Search ─────────────────────────────────────────────────
@@ -82,6 +83,24 @@ export default function Notes() {
     // Reset after a delay — NoteEditor uses this flag to focus the title
     setTimeout(() => setAutoFocusTitle(false), 200)
   }, [creating, createNote])
+
+  // ── Delete note (move to Trash) ────────────────────────────
+  const handleDeleteRequest = useCallback(() => {
+    if (!selectedNoteId) return
+    setShowDeleteConfirm(true)
+  }, [selectedNoteId])
+
+  const handleConfirmDelete = useCallback(async () => {
+    setShowDeleteConfirm(false)
+    if (!selectedNoteId) return
+
+    const { error: err } = await deleteNote(selectedNoteId)
+    if (err) {
+      setSaveError(err)
+    } else {
+      setSelectedNoteId(null) // Clear selection after moving to trash
+    }
+  }, [selectedNoteId, deleteNote])
 
   // ── Ctrl/Cmd + N keyboard shortcut ─────────────────────────
   useEffect(() => {
@@ -225,6 +244,7 @@ export default function Notes() {
             onDirtyChange={setIsEditorDirty}
             onSave={handleSave}
             autoFocusTitle={autoFocusTitle}
+            onDelete={handleDeleteRequest}
           />
           {/* Save error toast — positioned at bottom of editor */}
           {saveError && (
@@ -247,6 +267,17 @@ export default function Notes() {
           confirmLabel="Discard"
           onConfirm={handleConfirmDiscard}
           onCancel={handleConfirmCancel}
+        />
+      )}
+
+      {/* Delete confirmation */}
+      {showDeleteConfirm && (
+        <ConfirmDialog
+          title="Move to Trash"
+          message={`"${selectedNote?.title || 'Untitled'}" will be moved to Trash. You can restore it later.`}
+          confirmLabel="Move to Trash"
+          onConfirm={handleConfirmDelete}
+          onCancel={() => setShowDeleteConfirm(false)}
         />
       )}
     </div>

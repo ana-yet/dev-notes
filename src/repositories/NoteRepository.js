@@ -172,6 +172,75 @@ export async function restore(id) {
 }
 
 /**
+ * Moves a note to Trash (soft delete).
+ *
+ * Sets isDeleted = true and deletedAt = current timestamp.
+ * The note remains in storage but is hidden from normal views.
+ *
+ * @param {string} id
+ * @returns {Promise<{ data: Object|null, error: string|null }>}
+ */
+export async function trash(id) {
+  return update(id, {
+    isDeleted: true,
+    deletedAt: new Date().toISOString(),
+    isPinned: false, // Unpin when trashing
+  })
+}
+
+/**
+ * Restores a note from Trash.
+ *
+ * Sets isDeleted = false and clears deletedAt.
+ *
+ * @param {string} id
+ * @returns {Promise<{ data: Object|null, error: string|null }>}
+ */
+export async function restoreFromTrash(id) {
+  return update(id, {
+    isDeleted: false,
+    deletedAt: null,
+  })
+}
+
+/**
+ * Returns all notes currently in Trash.
+ *
+ * @returns {Promise<{ data: Object[], error: string|null }>}
+ */
+export async function getDeleted() {
+  try {
+    const notes = await loadAll()
+    const deleted = notes.filter((n) => n.isDeleted)
+    return { data: deleted, error: null }
+  } catch (err) {
+    log.error('getDeleted failed:', err)
+    return { data: [], error: 'Failed to load deleted notes' }
+  }
+}
+
+/**
+ * Permanently removes all notes in Trash.
+ * This is irreversible — the data is gone from storage.
+ *
+ * @returns {Promise<{ data: number, error: string|null }>} Number of notes removed.
+ */
+export async function emptyTrash() {
+  try {
+    const notes = await loadAll()
+    const active = notes.filter((n) => !n.isDeleted)
+    const removedCount = notes.length - active.length
+
+    await saveAll(active)
+    log.info('Trash emptied:', removedCount, 'notes permanently deleted')
+    return { data: removedCount, error: null }
+  } catch (err) {
+    log.error('emptyTrash failed:', err)
+    return { data: 0, error: 'Failed to empty trash' }
+  }
+}
+
+/**
  * Pins a note so it appears at the top of lists.
  *
  * @param {string} id

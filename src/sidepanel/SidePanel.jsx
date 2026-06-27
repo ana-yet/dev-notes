@@ -9,6 +9,7 @@ import Snippets from '../pages/Snippets'
 import Highlights from '../pages/Highlights'
 import Bookmarks from '../pages/Bookmarks'
 import Settings from '../pages/Settings'
+import Trash from '../pages/Trash'
 
 /**
  * SidePanel — Root component for the side panel application.
@@ -34,6 +35,7 @@ export default function SidePanel() {
             <Route path="/highlights" element={<Highlights />} />
             <Route path="/bookmarks" element={<Bookmarks />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/trash" element={<Trash />} />
           </Route>
         </Routes>
       </HashRouter>

@@ -38,6 +38,8 @@ export function create(overrides = {}) {
     isPinned: false,
     isFavorite: false,
     isArchived: false,
+    isDeleted: false,
+    deletedAt: null,
     color: null,
     ...overrides,
   }
@@ -57,6 +59,8 @@ export function getDefault() {
     isPinned: false,
     isFavorite: false,
     isArchived: false,
+    isDeleted: false,
+    deletedAt: null,
     color: null,
   }
 }

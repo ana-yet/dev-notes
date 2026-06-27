@@ -51,7 +51,7 @@ const STATUS_CONFIG = {
   },
 }
 
-export default function EditorToolbar({ isDirty, onSave, saveStatus }) {
+export default function EditorToolbar({ isDirty, onSave, saveStatus, onDelete }) {
   const isSaving = saveStatus === 'saving'
   const status = STATUS_CONFIG[saveStatus]
 
@@ -110,14 +110,14 @@ export default function EditorToolbar({ isDirty, onSave, saveStatus }) {
       {/* Spacer */}
       <div className="flex-1" />
 
-      {/* Delete — separated visually */}
+      {/* Delete — moves note to Trash */}
       <Button
         variant="ghost"
         size="sm"
         icon={Trash2}
-        disabled
+        onClick={onDelete}
         className="text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
-        title="Delete note (coming soon)"
+        title="Move to Trash (Delete)"
       >
         Delete
       </Button>
