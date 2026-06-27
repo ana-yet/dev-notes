@@ -33,14 +33,22 @@ function stripMarkdown(text) {
     .trim()
 }
 
-export default function NoteCard({ note, folderName }) {
+export default function NoteCard({ note, folderName, selected, onClick }) {
   const preview = truncate(stripMarkdown(note.content), 120)
 
   return (
     <div
-      className={`group relative bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 hover:border-gray-300 dark:hover:border-gray-700 hover:shadow-sm transition-all cursor-pointer ${
-        note.color ? 'border-l-4' : ''
-      }`}
+      onClick={() => onClick?.(note.id)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') onClick?.(note.id)
+      }}
+      className={`group relative bg-white dark:bg-gray-900 border rounded-xl p-4 hover:shadow-sm transition-all cursor-pointer ${
+        selected
+          ? 'border-violet-300 dark:border-violet-700 ring-1 ring-violet-200 dark:ring-violet-800'
+          : 'border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700'
+      } ${note.color ? 'border-l-4' : ''}`}
       style={note.color ? { borderLeftColor: note.color } : undefined}
     >
       {/* ── Status indicators (top-right) ──────────────────── */}

@@ -16,7 +16,7 @@ import LoadingState from '../ui/LoadingState'
  * This component is purely presentational — it never fetches data.
  */
 
-export default function NotesList({ notes, folders, loading, error }) {
+export default function NotesList({ notes, folders, loading, error, selectedNoteId, onSelectNote }) {
   // ── Loading ────────────────────────────────────────────────
   if (loading) {
     return <LoadingState message="Loading notes..." />
@@ -75,6 +75,8 @@ export default function NotesList({ notes, folders, loading, error }) {
                 key={note.id}
                 note={note}
                 folderName={folderMap[note.folderId]}
+                selected={note.id === selectedNoteId}
+                onClick={onSelectNote}
               />
             ))}
           </div>
@@ -95,6 +97,8 @@ export default function NotesList({ notes, folders, loading, error }) {
                 key={note.id}
                 note={note}
                 folderName={folderMap[note.folderId]}
+                selected={note.id === selectedNoteId}
+                onClick={onSelectNote}
               />
             ))}
           </div>
