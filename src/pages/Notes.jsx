@@ -1,6 +1,7 @@
 import { useCallback, useState, useMemo, useRef } from 'react'
 import { PageHeader } from '../components/ui'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
+import Toast from '../components/ui/Toast'
 import NotesToolbar from '../components/notes/NotesToolbar'
 import NotesFilters from '../components/notes/NotesFilters'
 import NotesList from '../components/notes/NotesList'
@@ -24,7 +25,7 @@ const log = logger.create('Notes')
  * dialog before allowing a note switch.
  */
 export default function Notes() {
-  const { notes, loading, error, searchNotes } = useNotes()
+  const { notes, loading, error, searchNotes, updateNote } = useNotes()
   const { folders } = useFolders()
 
   const [searchResults, setSearchResults] = useState(null)
@@ -32,6 +33,8 @@ export default function Notes() {
   const [selectedNoteId, setSelectedNoteId] = useState(null)
   const [isEditorDirty, setIsEditorDirty] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState(null)
   const pendingSwitchIdRef = useRef(null)
 
   // ── Search ─────────────────────────────────────────────────
@@ -79,14 +82,45 @@ export default function Notes() {
     pendingSwitchIdRef.current = null
   }
 
-  // ── Save handler (placeholder — no storage writes) ─────────
-  const handleSave = useCallback(({ title, content }) => {
-    log.info('Save triggered (placeholder)', {
-      title: title.slice(0, 50),
-      contentLength: content.length,
-    })
-    // Will call updateNote() in the next milestone.
-  }, [])
+  // ── Save handler — validates, updates repository, handles errors ──
+  const handleSave = useCallback(
+    async ({ title, content }) => {
+      if (!selectedNoteId || saving) return
+
+      // Validate: trim title, default to "Untitled Note" if empty
+      const trimmedTitle = title.trim()
+      const finalTitle = trimmedTitle || 'Untitled Note'
+      const finalContent = content
+
+      // Ignore duplicate saves — check against current stored data
+      if (
+        selectedNote &&
+        finalTitle === (selectedNote.title || '') &&
+        finalContent === (selectedNote.content || '')
+      ) {
+        log.info('Save skipped — no changes after trimming')
+        return
+      }
+
+      setSaving(true)
+      setSaveError(null)
+
+      const { data, error: err } = await updateNote(selectedNoteId, {
+        title: finalTitle,
+        content: finalContent,
+      })
+
+      setSaving(false)
+
+      if (err) {
+        log.error('Save failed:', err)
+        setSaveError(err)
+      } else {
+        log.info('Note saved:', selectedNoteId)
+      }
+    },
+    [selectedNoteId, selectedNote, saving, updateNote]
+  )
 
   // ── Derived data ───────────────────────────────────────────
   const displayNotes = searchActive ? searchResults : notes
@@ -144,13 +178,24 @@ export default function Notes() {
         </div>
 
         {/* Right panel — editor */}
-        <div className="flex-1 overflow-y-auto border-t min-[640px]:border-t-0 border-gray-200 dark:border-gray-800">
+        <div className="flex-1 overflow-y-auto border-t min-[640px]:border-t-0 border-gray-200 dark:border-gray-800 relative">
           <NoteEditor
             note={selectedNote}
             folderName={selectedFolderName}
             onDirtyChange={setIsEditorDirty}
             onSave={handleSave}
+            saving={saving}
           />
+          {/* Save error toast — positioned at bottom of editor */}
+          {saveError && (
+            <div className="sticky bottom-4 mx-4 z-10">
+              <Toast
+                message={`Save failed: ${saveError}`}
+                type="error"
+                onClose={() => setSaveError(null)}
+              />
+            </div>
+          )}
         </div>
       </div>
 

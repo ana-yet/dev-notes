@@ -23,23 +23,24 @@ const ACTIONS = [
   { icon: Share2, label: 'Share', variant: 'ghost', title: 'Share note' },
 ]
 
-export default function EditorToolbar({ isDirty, onSave }) {
+export default function EditorToolbar({ isDirty, onSave, saving }) {
   return (
     <div className="flex items-center gap-1 px-5 py-2 border-b border-gray-100 dark:border-gray-800/50 overflow-x-auto">
-      {/* Save — primary when dirty, ghost when clean */}
+      {/* Save — primary when dirty, ghost when clean, spinner when saving */}
       <Button
-        variant={isDirty ? 'primary' : 'ghost'}
+        variant={isDirty && !saving ? 'primary' : 'ghost'}
         size="sm"
         icon={Save}
-        disabled={!isDirty}
+        disabled={!isDirty || saving}
+        loading={saving}
         onClick={onSave}
         title="Save changes (Ctrl+S)"
       >
-        Save
+        {saving ? 'Saving...' : 'Save'}
       </Button>
 
-      {/* Dirty indicator */}
-      {isDirty && (
+      {/* Dirty indicator — hidden during save */}
+      {isDirty && !saving && (
         <span className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 ml-1 mr-2">
           <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
           Unsaved

@@ -26,7 +26,7 @@ import NoteMetadata from './NoteMetadata'
  *     - Conflict detection (compare draft timestamp vs repository timestamp)
  */
 
-export default function NoteEditor({ note, folderName, onDirtyChange, onSave }) {
+export default function NoteEditor({ note, folderName, onDirtyChange, onSave, saving }) {
   const [draftTitle, setDraftTitle] = useState('')
   const [draftContent, setDraftContent] = useState('')
 
@@ -84,7 +84,7 @@ export default function NoteEditor({ note, folderName, onDirtyChange, onSave }) 
         onTitleChange={setDraftTitle}
       />
 
-      <EditorToolbar isDirty={isDirty} onSave={handleSave} />
+      <EditorToolbar isDirty={isDirty} onSave={handleSave} saving={saving} />
 
       <div className="flex-1 overflow-y-auto">
         <EditorContent content={draftContent} onChange={setDraftContent} />
