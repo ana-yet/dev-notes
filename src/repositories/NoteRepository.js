@@ -299,12 +299,82 @@ export async function search(query) {
     const results = notes.filter(
       (n) =>
         n.title.toLowerCase().includes(q) ||
-        n.content.toLowerCase().includes(q)
+        n.content.toLowerCase().includes(q) ||
+        (n.url && n.url.toLowerCase().includes(q))
     )
 
     return { data: results, error: null }
   } catch (err) {
     log.error('search failed:', err)
     return { data: [], error: 'Failed to search notes' }
+  }
+}
+
+/**
+ * Finds a note by its URL (exact match, case-insensitive).
+ *
+ * @param {string} url
+ * @returns {Promise<{ data: Object|null, error: string|null }>}
+ */
+export async function getByUrl(url) {
+  try {
+    if (!url || typeof url !== 'string') {
+      return { data: null, error: null }
+    }
+
+    const notes = await loadAll()
+    const normalUrl = url.trim().toLowerCase()
+
+    const note = notes.find(
+      (n) => n.url && n.url.trim().toLowerCase() === normalUrl && !n.isDeleted
+    ) || null
+
+    return { data: note, error: null }
+  } catch (err) {
+    log.error('getByUrl failed:', err)
+    return { data: null, error: 'Failed to find note by URL' }
+  }
+}
+
+/**
+ * Creates a note for a specific web page.
+ *
+ * @param {Object} tab — Browser tab object with url, title, favIconUrl.
+ * @returns {Promise<{ data: Object|null, error: string|null }>}
+ */
+export async function createForPage(tab) {
+  try {
+    const url = tab?.url?.trim()
+    if (!url) {
+      return { data: null, error: 'No URL provided' }
+    }
+
+    // Prevent duplicate page notes for the same URL
+    const { data: existing } = await getByUrl(url)
+    if (existing) {
+      log.info('Page note already exists for:', url)
+      return { data: existing, error: null }
+    }
+
+    const note = Note.create({
+      title: tab.title?.trim() || url,
+      content: '',
+      url,
+    })
+
+    const { valid, errors } = Note.validate(note)
+    if (!valid) {
+      return { data: null, error: errors.join(', ') }
+    }
+
+    const notes = await loadAll()
+    notes.unshift(note)
+    await saveAll(notes)
+
+    log.info('Page note created:', note.id, 'for', url)
+    return { data: note, error: null }
+  } catch (err) {
+    log.error('createForPage failed:', err)
+    return { data: null, error: 'Failed to create page note' }
   }
 }

@@ -35,6 +35,9 @@ export function EditorProvider({
   onDelete,
   onDirtyChange,
   autoFocusTitle,
+  contextName,
+  tab,
+  onSaveSuccess,
 }) {
   const [draftTitle, setDraftTitle] = useState('')
   const [draftContent, setDraftContent] = useState('')
@@ -76,6 +79,14 @@ export function EditorProvider({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftTitle, draftContent, isDirty])
+
+  // ── Notify parent on successful save ───────────────────────
+  useEffect(() => {
+    if (autosave.saveStatus === 'saved') {
+      onSaveSuccess?.()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autosave.saveStatus])
 
   // ── Focus title after creation ─────────────────────────────
   useEffect(() => {
@@ -141,6 +152,10 @@ export function EditorProvider({
 
       // Focus
       titleRef,
+
+      // Page context
+      contextName,
+      tab,
     }),
     [
       note,
@@ -151,6 +166,8 @@ export function EditorProvider({
       autosave.saveStatus,
       handleManualSave,
       onDelete,
+      contextName,
+      tab,
     ]
   )
 

@@ -1,5 +1,5 @@
 import { useEffect, useCallback } from 'react'
-import { Pin, Heart, Archive } from 'lucide-react'
+import { Pin, Heart, Archive, Globe } from 'lucide-react'
 import { useEditor } from '../../contexts/EditorContext'
 
 /**
@@ -10,7 +10,7 @@ import { useEditor } from '../../contexts/EditorContext'
  * programmatic focus (e.g. after creating a new note).
  */
 export default function EditorHeader() {
-  const { note, draftTitle, setDraftTitle, titleRef } = useEditor()
+  const { note, draftTitle, setDraftTitle, titleRef, contextName, tab } = useEditor()
 
   const adjustHeight = useCallback(() => {
     const el = titleRef.current
@@ -28,6 +28,21 @@ export default function EditorHeader() {
     <div className="px-5 pt-5 pb-3">
       {/* Status badges */}
       <div className="flex items-center gap-2 mb-2">
+        {contextName === 'page' && note.url && (
+          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 rounded-md">
+            {tab?.favIconUrl ? (
+              <img
+                src={tab.favIconUrl}
+                alt=""
+                className="w-3 h-3 rounded-sm"
+                onError={(e) => { e.target.style.display = 'none' }}
+              />
+            ) : (
+              <Globe size={11} />
+            )}
+            Page Note
+          </span>
+        )}
         {note.isPinned && (
           <span className="inline-flex items-center gap-1 text-[11px] font-medium text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/40 px-2 py-0.5 rounded-md">
             <Pin size={11} />

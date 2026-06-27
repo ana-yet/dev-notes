@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom'
+import { useState, useEffect, useRef } from 'react'
 import {
   LayoutDashboard,
   FileText,
@@ -13,6 +14,8 @@ import {
   StickyNote,
   Trash2,
 } from 'lucide-react'
+import { subscribe, getActiveTab } from '../services/pageNoteService'
+import * as NoteRepository from '../repositories/NoteRepository'
 
 /**
  * Sidebar — Collapsible navigation panel.
@@ -52,6 +55,9 @@ export default function Sidebar({ collapsed, onToggle }) {
           </span>
         )}
       </div>
+
+      {/* ── Current Page ────────────────────────────────────── */}
+      <CurrentPageIndicator collapsed={collapsed} />
 
       {/* ── Navigation ──────────────────────────────────────── */}
       <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
@@ -122,5 +128,113 @@ export default function Sidebar({ collapsed, onToggle }) {
         </button>
       </div>
     </aside>
+  )
+}
+
+/**
+ * CurrentPageIndicator — Shows the active tab and its note status.
+ *
+ * Displays the page title and a status badge (Has Note ✅ or No Note).
+ * When no tab is detected (e.g. during dev), shows nothing.
+ *
+ * This component subscribes to tab changes via PageNoteService
+ * and checks for matching page notes in storage. It's lightweight
+ * and self-contained — no prop drilling required.
+ */
+function CurrentPageIndicator({ collapsed }) {
+  const [tab, setTab] = useState(null)
+  const [hasNote, setHasNote] = useState(false)
+  const cancelledRef = useRef(false)
+
+  useEffect(() => {
+    cancelledRef.current = false
+
+    // Get initial tab
+    getActiveTab().then((t) => {
+      if (!cancelledRef.current) setTab(t)
+    })
+
+    // Subscribe to tab changes
+    const unsubscribe = subscribe((t) => {
+      if (!cancelledRef.current) setTab(t)
+    })
+
+    return () => {
+      cancelledRef.current = true
+      unsubscribe()
+    }
+  }, [])
+
+  // Check if a note exists for the current URL
+  useEffect(() => {
+    let cancelled = false
+
+    async function checkNote() {
+      if (!tab?.url) {
+        if (!cancelled) setHasNote(false)
+        return
+      }
+
+      try {
+        const { data } = await NoteRepository.getByUrl(tab.url)
+        if (!cancelled) setHasNote(!!data)
+      } catch {
+        if (!cancelled) setHasNote(false)
+      }
+    }
+
+    checkNote()
+
+    return () => { cancelled = true }
+  }, [tab?.url])
+
+  // Don't render if collapsed or no tab
+  if (collapsed || !tab) return null
+
+  const pageTitle = tab.title || 'Untitled Page'
+  const faviconSrc = tab.favIconUrl || null
+
+  return (
+    <div className="px-3 py-2.5 border-b border-gray-100 dark:border-gray-800/50">
+      <div className="flex items-center gap-2 min-w-0">
+        {/* Favicon or globe icon */}
+        {faviconSrc ? (
+          <img
+            src={faviconSrc}
+            alt=""
+            className="w-4 h-4 rounded-sm shrink-0"
+            onError={(e) => {
+              e.target.style.display = 'none'
+            }}
+          />
+        ) : (
+          <Globe size={14} className="text-gray-400 dark:text-gray-500 shrink-0" />
+        )}
+
+        {/* Page title */}
+        <span className="text-xs text-gray-600 dark:text-gray-400 truncate flex-1 min-w-0">
+          {pageTitle}
+        </span>
+      </div>
+
+      {/* Note status */}
+      <div className="flex items-center gap-1.5 mt-1.5 ml-6">
+        {hasNote ? (
+          <>
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+            <span className="text-[11px] text-green-600 dark:text-green-400">
+              Has Note ✅
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-gray-600" />
+            <span className="text-[11px] text-gray-400 dark:text-gray-500">
+              No Note
+            </span>
+          </>
+        )}
+      </div>
+    </div>
   )
 }
