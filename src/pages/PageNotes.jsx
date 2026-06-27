@@ -1,327 +1,416 @@
-import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
-import { Globe, MousePointerClick } from 'lucide-react'
-import { PageHeader } from '../components/ui'
-import NotesList from '../components/notes/NotesList'
-import NoteEditor from '../components/editor/NoteEditor'
-import ActiveNoteIndicator from '../components/notes/ActiveNoteIndicator'
-import ConfirmDialog from '../components/ui/ConfirmDialog'
-import Toast from '../components/ui/Toast'
-import { EditorProvider } from '../contexts/EditorContext'
-import { useNotes } from '../hooks/useNotes'
-import { useFolders } from '../hooks/useFolders'
-import { usePageNote } from '../hooks/usePageNote'
-import logger from '../utils/logger'
+import { useState, useMemo, useEffect } from "react";
+import {
+  Globe,
+  Bookmark,
+  BookOpen,
+  Copy,
+  Trash2,
+  ExternalLink,
+  Check,
+  AlertCircle,
+} from "lucide-react";
+import NoteEditor from "../components/editor/NoteEditor";
+import Toast from "../components/ui/Toast";
+import { EditorProvider } from "../contexts/EditorContext";
+import { useNotes } from "../hooks/useNotes";
+import { useFolders } from "../hooks/useFolders";
+import { usePageNote } from "../hooks/usePageNote";
+import * as HighlightRepository from "../repositories/HighlightRepository";
+import * as BookmarkRepository from "../repositories/BookmarkRepository";
+import logger from "../utils/logger";
 
-const log = logger.create('PageNotes')
+const log = logger.create("PageNotes");
 
-/**
- * PageNotes — Notes tied to specific web pages.
- *
- * Automatically detects the active browser tab and finds the matching
- * page note. If no note exists for the current page, the user can
- * create one with a single click. The note's URL, title, and content
- * are kept in sync with the editor.
- *
- * How page notes differ from regular notes:
- *   - Every page note has a `url` field linking it to a web page.
- *   - Only one page note exists per URL (duplicates are prevented).
- *   - Page notes auto-load when the user navigates to the URL.
- *   - Page notes are discoverable by URL in search.
- *
- * This prepares for future features:
- *   - Highlights will reference the same URL to associate with page notes.
- *   - AI summaries will use the page note as context.
- */
 export default function PageNotes() {
-  const { notes, loading: notesLoading, error: notesError, updateNote, searchNotes } = useNotes()
-  const { folders } = useFolders()
-  const { activeTab, pageNote, hasNote, loading: tabLoading, createPageNote } = usePageNote(notes)
+  const { notes, loading: notesLoading, refresh } = useNotes();
+  const { folders } = useFolders();
+  const {
+    activeTab,
+    pageNote,
+    pageState,
+    hasNote,
+    isDraft,
+    loading: tabLoading,
+    savePageNote,
+  } = usePageNote(notes, { onPersist: refresh });
 
-  const [searchResults, setSearchResults] = useState(null)
-  const [searchActive, setSearchActive] = useState(false)
-  const [selectedNoteId, setSelectedNoteId] = useState(null)
-  const [isEditorDirty, setIsEditorDirty] = useState(false)
-  const [showConfirm, setShowConfirm] = useState(false)
-  const [saveError, setSaveError] = useState(null)
-  const [creating, setCreating] = useState(false)
-  const [autoFocusTitle, setAutoFocusTitle] = useState(false)
-  const [toast, setToast] = useState(null)
+  // Resources local state for current tab
+  const [highlights, setHighlights] = useState([]);
+  const [bookmarks, setBookmarks] = useState([]);
 
-  // ── Track if user manually selected a note ─────────────────
-  const manualSelectRef = useRef(false)
+  const [saveError, setSaveError] = useState(null);
+  const [toast, setToast] = useState(null);
+  const [copiedLink, setCopiedLink] = useState(false);
 
-  // ── Auto-select page note when tab changes ─────────────────
+  // Use activeTab directly — no mock fallback that masks bugs
+  const currentTab = activeTab;
+
+  // Load highlights & bookmarks matching current URL
   useEffect(() => {
-    if (pageNote && !isEditorDirty && !manualSelectRef.current) {
-      setSelectedNoteId(pageNote.id)
+    let cancelled = false;
+
+    async function loadResources() {
+      if (!currentTab?.url) {
+        if (!cancelled) {
+          setHighlights([]);
+          setBookmarks([]);
+        }
+        return;
+      }
+
+      try {
+        const [resH, resB] = await Promise.all([
+          HighlightRepository.getAll(),
+          BookmarkRepository.getAll(),
+        ]);
+        if (!cancelled) {
+          if (!resH.error) {
+            setHighlights(resH.data.filter((h) => h.url === currentTab.url));
+          }
+          if (!resB.error) {
+            setBookmarks(resB.data.filter((b) => b.url === currentTab.url));
+          }
+        }
+      } catch (err) {
+        log.error("Failed to load page resources:", err);
+      }
     }
-  }, [pageNote?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Reset manual selection flag when page note changes (tab switch)
-  useEffect(() => {
-    manualSelectRef.current = false
-  }, [pageNote?.id])
+    loadResources();
 
-  // ── Search ─────────────────────────────────────────────────
-  const handleSearch = useCallback(
-    async (query) => {
-      if (!query || !query.trim()) {
-        setSearchResults(null)
-        setSearchActive(false)
-        return
-      }
+    return () => {
+      cancelled = true;
+    };
+  }, [currentTab?.url]);
 
-      const { data, error: err } = await searchNotes(query)
-      if (!err) {
-        setSearchResults(data)
-        setSearchActive(true)
-      }
-    },
-    [searchNotes]
-  )
+  const isBookmarked = useMemo(() => {
+    return bookmarks.some((b) => !b.isReadingList);
+  }, [bookmarks]);
 
-  // ── Create page note ───────────────────────────────────────
-  const handleCreatePageNote = useCallback(async () => {
-    if (creating) return
+  const isSavedToReadLater = useMemo(() => {
+    return bookmarks.some((b) => b.isReadingList);
+  }, [bookmarks]);
 
-    setCreating(true)
-    setSaveError(null)
+  // Save handler for editor
+  const handleSave = async ({ title, content }) => {
+    setSaveError(null);
 
-    const { error: err } = await createPageNote((note) => {
-      // Select the new note and focus the title
-      setSelectedNoteId(note.id)
-      setAutoFocusTitle(true)
-      setTimeout(() => setAutoFocusTitle(false), 200)
-      setToast({ message: `Page note created for "${activeTab?.title || 'this page'}"`, type: 'success' })
-    })
-
-    setCreating(false)
+    const { data, error: err } = await savePageNote({
+      title,
+      content,
+    });
 
     if (err) {
-      log.error('Create page note failed:', err)
-      setSaveError(err)
+      log.error("Save failed:", err);
+      setSaveError(err);
     }
-  }, [creating, createPageNote, activeTab?.title])
+    return { data, error: err };
+  };
 
-  // ── Note selection with dirty check ────────────────────────
-  const handleSelectNote = useCallback(
-    (noteId) => {
-      if (noteId === selectedNoteId) return
-
-      manualSelectRef.current = true
-
-      if (isEditorDirty) {
-        setShowConfirm(true)
-      } else {
-        setSelectedNoteId(noteId)
+  // Add bookmark quick action
+  const handleAddBookmark = async () => {
+    if (isBookmarked) {
+      // Remove it
+      const item = bookmarks.find((b) => !b.isReadingList);
+      if (item) {
+        const { error } = await BookmarkRepository.remove(item.id);
+        if (!error) {
+          setBookmarks((prev) => prev.filter((b) => b.id !== item.id));
+          showToast("Bookmark removed", "success");
+        }
       }
-    },
-    [selectedNoteId, isEditorDirty]
-  )
+    } else {
+      const { data, error } = await BookmarkRepository.create({
+        title: currentTab.title || "Untitled Page",
+        url: currentTab.url,
+        description: "Saved from DevNotes sidepanel",
+        isReadingList: false,
+        favicon: currentTab.favIconUrl,
+      });
+      if (!error && data) {
+        setBookmarks((prev) => [...prev, data]);
+        showToast("Bookmark saved", "success");
+      }
+    }
+  };
 
-  const handleConfirmDiscard = () => {
-    setShowConfirm(false)
+  // Add read later quick action
+  const handleAddReadLater = async () => {
+    if (isSavedToReadLater) {
+      // Remove it
+      const item = bookmarks.find((b) => b.isReadingList);
+      if (item) {
+        const { error } = await BookmarkRepository.remove(item.id);
+        if (!error) {
+          setBookmarks((prev) => prev.filter((b) => b.id !== item.id));
+          showToast("Removed from Read Later", "success");
+        }
+      }
+    } else {
+      const { data, error } = await BookmarkRepository.create({
+        title: currentTab.title || "Untitled Page",
+        url: currentTab.url,
+        description: "Saved to Read Later from DevNotes",
+        isReadingList: true,
+        favicon: currentTab.favIconUrl,
+      });
+      if (!error && data) {
+        setBookmarks((prev) => [...prev, data]);
+        showToast("Saved to Read Later", "success");
+      }
+    }
+  };
+
+  // Copy markdown link quick action
+  const handleCopyMarkdown = () => {
+    const md = `[${currentTab.title}](${currentTab.url})`;
+    navigator.clipboard.writeText(md);
+    setCopiedLink(true);
+    showToast("Markdown link copied", "success");
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
+
+  // Delete highlight
+  const handleDeleteHighlight = async (id) => {
+    const { error } = await HighlightRepository.remove(id);
+    if (!error) {
+      setHighlights((prev) => prev.filter((h) => h.id !== id));
+      showToast("Highlight deleted", "success");
+    }
+  };
+
+  function showToast(message, type = "success") {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
   }
 
-  const handleConfirmCancel = () => {
-    setShowConfirm(false)
+  const isLoading = notesLoading || tabLoading;
+
+  // Guard: no active tab detected yet (initial load or tab unavailable)
+  if (!currentTab) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-center px-6 bg-gray-50 dark:bg-gray-950">
+        <div className="w-14 h-14 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-5">
+          <Globe size={28} className="text-gray-300 dark:text-gray-600" />
+        </div>
+        <h3 className="text-base font-medium text-gray-900 dark:text-white mb-1.5">
+          {isLoading ? "Detecting active page..." : "No active tab detected"}
+        </h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400 max-w-55 leading-relaxed">
+          {isLoading
+            ? "Waiting for browser tab information."
+            : "Open a web page in your browser to use Page Notes."}
+        </p>
+      </div>
+    );
   }
-
-  // ── Save handler ───────────────────────────────────────────
-  const handleSave = useCallback(
-    async ({ title, content }) => {
-      if (!selectedNoteId) return { error: 'No note selected' }
-
-      const trimmedTitle = title.trim()
-      const finalTitle = trimmedTitle || 'Untitled Note'
-
-      setSaveError(null)
-
-      const { data, error: err } = await updateNote(selectedNoteId, {
-        title: finalTitle,
-        content,
-      })
-
-      if (err) {
-        log.error('Save failed:', err)
-        setSaveError(err)
-      } else {
-        log.info('Page note saved:', selectedNoteId)
-      }
-
-      return { data, error: err }
-    },
-    [selectedNoteId, updateNote]
-  )
-
-  // ── Derived data ───────────────────────────────────────────
-  const displayNotes = searchActive ? searchResults : notes
-  const pageNotes = (displayNotes || []).filter((n) => n.url && !n.isDeleted)
-  const noteCount = searchActive ? pageNotes.length : notes.filter((n) => n.url && !n.isDeleted).length
-
-  const selectedNote = useMemo(
-    () => (notes || []).find((n) => n.id === selectedNoteId) || null,
-    [notes, selectedNoteId]
-  )
-
-  const folderMap = useMemo(() => {
-    const map = {}
-    for (const folder of folders) {
-      map[folder.id] = folder.name
-    }
-    return map
-  }, [folders])
-
-  const selectedFolderName = selectedNote
-    ? folderMap[selectedNote.folderId]
-    : null
-
-  const isLoading = notesLoading || tabLoading
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Page header */}
-      <div className="px-4 pt-4 pb-0">
-        <PageHeader
-          title="Page Notes"
-          description={
-            !isLoading && noteCount > 0
-              ? `${noteCount} page note${noteCount !== 1 ? 's' : ''}`
-              : 'Notes attached to specific web pages.'
-          }
-        />
-      </div>
-
-      {/* Search bar */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-200 dark:border-gray-800">
-        <div className="relative flex-1">
-          <svg
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
-            width="15"
-            height="15"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.3-4.3" />
-          </svg>
-          <input
-            type="text"
-            onChange={(e) => handleSearch(e.target.value)}
-            placeholder="Search page notes..."
-            className="w-full pl-8 pr-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-800 border border-transparent rounded-lg focus:outline-none focus:bg-white focus:border-gray-300 dark:focus:bg-gray-900 dark:focus:border-gray-700 dark:text-gray-200 placeholder-gray-400 transition-colors"
-          />
-        </div>
-      </div>
-
-      {/* Split layout: list + editor */}
-      <div className="flex flex-col min-[640px]:flex-row flex-1 overflow-hidden">
-        {/* Left panel — page notes list */}
-        <div className="min-[640px]:w-[40%] min-[640px]:border-r border-gray-200 dark:border-gray-800 overflow-y-auto max-h-[45vh] min-[640px]:max-h-none">
-          {/* Current page indicator */}
-          {activeTab && !searchActive && (
-            <ActiveNoteIndicator
-              tab={activeTab}
-              hasNote={hasNote}
-            />
-          )}
-
-          {/* Create page note button (when no note for current page) */}
-          {!hasNote && activeTab && !searchActive && !isLoading && (
-            <div className="px-4 py-3">
-              <button
-                onClick={handleCreatePageNote}
-                disabled={creating}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 active:bg-violet-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
-              >
-                {creating ? (
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                ) : (
-                  <Globe size={16} />
-                )}
-                {creating ? 'Creating...' : 'Create Page Note'}
-              </button>
-              <p className="text-[11px] text-gray-400 dark:text-gray-500 text-center mt-2">
-                Save a note for {activeTab.title || 'this page'}
-              </p>
-            </div>
-          )}
-
-          {/* Page notes list */}
-          <NotesList
-            notes={pageNotes}
-            folders={folders}
-            loading={isLoading}
-            error={notesError}
-            selectedNoteId={selectedNoteId}
-            onSelectNote={handleSelectNote}
-          />
-
-          {/* Empty state when no page notes and no active tab */}
-          {!activeTab && !isLoading && pageNotes.length === 0 && !searchActive && (
-            <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
-              <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
-                <Globe size={24} className="text-gray-400 dark:text-gray-500" />
-              </div>
-              <h3 className="text-base font-medium text-gray-900 dark:text-white mb-1.5">
-                No page notes yet
-              </h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400 max-w-56 leading-relaxed">
-                Browse the web and add notes to any page you visit.
-              </p>
-              <div className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 mt-3">
-                <MousePointerClick size={14} />
-                <span>Navigate to a web page</span>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Right panel — editor */}
-        <div className="flex-1 overflow-y-auto border-t min-[640px]:border-t-0 border-gray-200 dark:border-gray-800 relative">
-          <EditorProvider
-            note={selectedNote}
-            folderName={selectedFolderName}
-            onSave={handleSave}
-            onDirtyChange={setIsEditorDirty}
-            autoFocusTitle={autoFocusTitle}
-            contextName="page"
-            tab={activeTab}
-          >
-            <NoteEditor />
-          </EditorProvider>
-
-          {/* Save error toast */}
-          {saveError && (
-            <div className="sticky bottom-4 mx-4 z-10">
-              <Toast
-                message={`Save failed: ${saveError}`}
-                type="error"
-                onClose={() => setSaveError(null)}
+    <div className="flex flex-col min-h-full bg-gray-50 dark:bg-gray-950 pb-6">
+      {/* ── Active Tab Header Card ────────────────────────────────────── */}
+      <div className="p-4 bg-white dark:bg-gray-900 border-b border-gray-200/60 dark:border-gray-900/60 shadow-sm">
+        <div className="flex items-start gap-3">
+          <div className="p-2 rounded-xl bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400 shrink-0">
+            {currentTab?.favIconUrl ? (
+              <img
+                src={currentTab.favIconUrl}
+                alt=""
+                className="w-5 h-5 rounded-md"
+                onError={(e) => {
+                  e.target.style.display = "none";
+                }}
               />
+            ) : (
+              <Globe size={20} />
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <span className="text-[10px] font-semibold text-violet-600 dark:text-violet-400 uppercase tracking-wider">
+              Active Context
+            </span>
+            <h2 className="text-sm font-bold text-gray-900 dark:text-white truncate mt-0.5 leading-snug">
+              {currentTab.title || "Untitled Page"}
+            </h2>
+            <a
+              href={currentTab.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[11px] text-gray-400 dark:text-gray-500 hover:text-violet-600 dark:hover:text-violet-400 inline-flex items-center gap-1 mt-1 truncate max-w-full"
+            >
+              <span className="truncate">{currentTab.url}</span>
+              <ExternalLink size={10} className="shrink-0" />
+            </a>
+          </div>
+        </div>
+
+        {/* Note status & last updated info */}
+        {pageNote && (
+          <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 text-[10px] text-gray-400 dark:text-gray-500">
+            <span
+              className={`flex items-center gap-1 font-semibold px-2 py-0.5 rounded-md ${
+                isDraft
+                  ? "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30"
+                  : "text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/30"
+              }`}
+            >
+              <span
+                className={`w-1 h-1 rounded-full ${isDraft ? "bg-amber-500" : "bg-green-500"}`}
+              />
+              {isDraft ? "New Draft" : "Connected Note"}
+            </span>
+            {hasNote && pageNote.updatedAt && (
+              <span>
+                Last edited: {new Date(pageNote.updatedAt).toLocaleDateString()}
+              </span>
+            )}
+            {pageState === "searching" && <span>Checking saved notes...</span>}
+          </div>
+        )}
+      </div>
+
+      {/* ── Page Content Scroll Area ──────────────────────────────────── */}
+      <div className="px-4 py-4 space-y-5 flex-1">
+        {/* SECTION 1: Page Note Editor */}
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider px-1">
+            Notes
+          </h3>
+
+          {pageNote ? (
+            <div className="bg-white dark:bg-gray-900 border border-gray-200/60 dark:border-gray-905 rounded-2xl overflow-hidden min-h-[220px] shadow-sm relative">
+              <EditorProvider
+                note={pageNote}
+                folderName={
+                  folders.find((f) => f.id === pageNote.folderId)?.name
+                }
+                onSave={handleSave}
+                contextName="page"
+                tab={currentTab}
+              >
+                <NoteEditor />
+              </EditorProvider>
+              {saveError && (
+                <div className="absolute bottom-4 left-4 right-4 z-10">
+                  <Toast
+                    message={`Save failed: ${saveError}`}
+                    type="error"
+                    onClose={() => setSaveError(null)}
+                  />
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="p-4 bg-white dark:bg-gray-900 border border-gray-200/60 dark:border-gray-900 rounded-2xl text-center shadow-sm">
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                {tabLoading
+                  ? "Preparing page note..."
+                  : "This page cannot be used for page notes."}
+              </span>
             </div>
           )}
         </div>
-      </div>
 
-      {/* Unsaved changes confirmation */}
-      {showConfirm && (
-        <ConfirmDialog
-          title="Unsaved Changes"
-          message="You have unsaved changes. Discard them?"
-          confirmLabel="Discard"
-          onConfirm={handleConfirmDiscard}
-          onCancel={handleConfirmCancel}
-        />
-      )}
+        {/* SECTION 2: Page Highlights */}
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider px-1">
+            Highlights ({highlights.length})
+          </h3>
+
+          {highlights.length > 0 ? (
+            <div className="space-y-2">
+              {highlights.map((highlight) => (
+                <div
+                  key={highlight.id}
+                  className="group p-3 bg-white dark:bg-gray-900 border border-gray-200/60 dark:border-gray-900 rounded-xl relative hover:border-gray-300 dark:hover:border-gray-800 transition-all duration-200"
+                >
+                  <p
+                    className="text-xs text-gray-700 dark:text-gray-300 border-l-2 pl-2 border-violet-500/40 italic leading-relaxed"
+                    style={{ borderLeftColor: highlight.color }}
+                  >
+                    "{highlight.text}"
+                  </p>
+                  {highlight.note && (
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-2 font-medium">
+                      📝 {highlight.note}
+                    </p>
+                  )}
+                  <button
+                    onClick={() => handleDeleteHighlight(highlight.id)}
+                    className="absolute right-2 top-2 p-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer"
+                    title="Delete highlight"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="p-4 bg-white dark:bg-gray-900 border border-gray-150 dark:border-gray-900 rounded-2xl text-center shadow-xs">
+              <div className="flex items-center justify-center gap-1.5 text-[11px] text-gray-400 dark:text-gray-500 leading-normal">
+                <AlertCircle size={13} className="text-violet-500/70" />
+                <span>Select text on this tab to save highlights.</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* SECTION 3: Quick Actions */}
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider px-1">
+            Quick Actions
+          </h3>
+
+          <div className="grid grid-cols-2 gap-2">
+            {/* Bookmark button */}
+            <button
+              onClick={handleAddBookmark}
+              className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-medium transition-all text-left cursor-pointer ${
+                isBookmarked
+                  ? "bg-violet-50/50 border-violet-200/80 text-violet-600 dark:bg-violet-950/20 dark:border-violet-900 dark:text-violet-400"
+                  : "bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-850 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-850"
+              }`}
+            >
+              <Bookmark
+                size={14}
+                className={isBookmarked ? "fill-current" : ""}
+              />
+              <span>{isBookmarked ? "Bookmarked ✓" : "Bookmark Page"}</span>
+            </button>
+
+            {/* Read Later button */}
+            <button
+              onClick={handleAddReadLater}
+              className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-medium transition-all text-left cursor-pointer ${
+                isSavedToReadLater
+                  ? "bg-violet-50/50 border-violet-200/80 text-violet-600 dark:bg-violet-950/20 dark:border-violet-900 dark:text-violet-400"
+                  : "bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-850 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-850"
+              }`}
+            >
+              <BookOpen size={14} />
+              <span>
+                {isSavedToReadLater ? "Read Later ✓" : "Save to Read Later"}
+              </span>
+            </button>
+
+            {/* Copy Markdown link button */}
+            <button
+              onClick={handleCopyMarkdown}
+              className="flex items-center gap-2 px-3 py-2.5 rounded-xl border bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-850 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-850 text-xs font-medium transition-all text-left cursor-pointer col-span-2"
+            >
+              {copiedLink ? (
+                <Check size={14} className="text-green-500" />
+              ) : (
+                <Copy size={14} />
+              )}
+              <span>Copy Link as Markdown</span>
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* Toast notifications */}
       {toast && (
-        <div className="fixed bottom-4 right-4 z-50 max-w-sm">
+        <div className="fixed bottom-16 right-4 z-50 max-w-xs">
           <Toast
             message={toast.message}
             type={toast.type}
@@ -330,5 +419,5 @@ export default function PageNotes() {
         </div>
       )}
     </div>
-  )
+  );
 }

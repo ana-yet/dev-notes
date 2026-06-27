@@ -1,4 +1,5 @@
-import { Sun, Moon, Monitor, Settings as SettingsIcon } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Sun, Moon, Monitor, Trash2, Keyboard } from 'lucide-react'
 import { PageHeader, Card } from '../components/ui'
 import { useTheme } from '../contexts/ThemeContext'
 
@@ -79,9 +80,36 @@ export default function Settings() {
         <h2 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">
           Storage
         </h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400">
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
           Storage management coming soon.
         </p>
+        <Link
+          to="/trash"
+          className="inline-flex items-center gap-2 text-xs font-medium text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors"
+        >
+          <Trash2 size={13} />
+          View Trash
+        </Link>
+      </Card>
+
+      <Card className="p-4 mb-4">
+        <h2 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+          <Keyboard size={14} />
+          Keyboard Shortcuts
+        </h2>
+        <div className="space-y-2">
+          {[
+            { key: '⌘ N', desc: 'New note' },
+            { key: 'Esc', desc: 'Back to list' },
+          ].map(({ key, desc }) => (
+            <div key={key} className="flex items-center justify-between text-xs">
+              <span className="text-gray-600 dark:text-gray-400">{desc}</span>
+              <kbd className="px-2 py-0.5 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md font-mono text-gray-700 dark:text-gray-300">
+                {key}
+              </kbd>
+            </div>
+          ))}
+        </div>
       </Card>
 
       <Card className="p-4">

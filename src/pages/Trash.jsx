@@ -1,13 +1,10 @@
-import { useState, useCallback } from 'react'
-import { Trash2 } from 'lucide-react'
-import { PageHeader, Button, EmptyState, LoadingState } from '../components/ui'
-import ConfirmDialog from '../components/ui/ConfirmDialog'
-import Toast from '../components/ui/Toast'
-import TrashCard from '../components/notes/TrashCard'
-import { useNotes } from '../hooks/useNotes'
-import logger from '../utils/logger'
-
-const log = logger.create('Trash')
+import { useState, useCallback } from "react";
+import { Trash2 } from "lucide-react";
+import { PageHeader, Button, EmptyState, LoadingState } from "../components/ui";
+import ConfirmDialog from "../components/ui/ConfirmDialog";
+import Toast from "../components/ui/Toast";
+import TrashCard from "../components/notes/TrashCard";
+import { useNotes } from "../hooks/useNotes";
 
 /**
  * Trash — Displays deleted notes with restore and permanent delete.
@@ -17,61 +14,67 @@ const log = logger.create('Trash')
  * "Empty Trash" permanently removes all deleted notes.
  */
 export default function Trash() {
-  const { deletedNotes, loading, error, restoreFromTrash, permanentDeleteNote, emptyTrash } =
-    useNotes()
+  const {
+    deletedNotes,
+    loading,
+    error,
+    restoreFromTrash,
+    permanentDeleteNote,
+    emptyTrash,
+  } = useNotes();
 
-  const [confirmAction, setConfirmAction] = useState(null)
-  const [toast, setToast] = useState(null)
+  const [confirmAction, setConfirmAction] = useState(null);
+  const [toast, setToast] = useState(null);
 
   // ── Restore ────────────────────────────────────────────────
   const handleRestore = useCallback(
     async (id) => {
-      const { error: err } = await restoreFromTrash(id)
+      const { error: err } = await restoreFromTrash(id);
       if (err) {
-        setToast({ message: `Restore failed: ${err}`, type: 'error' })
+        setToast({ message: `Restore failed: ${err}`, type: "error" });
       } else {
-        setToast({ message: 'Note restored', type: 'success' })
+        setToast({ message: "Note restored", type: "success" });
       }
     },
-    [restoreFromTrash]
-  )
+    [restoreFromTrash],
+  );
 
   // ── Permanent delete (single) ──────────────────────────────
   const handlePermanentDeleteRequest = useCallback((id) => {
-    setConfirmAction({ type: 'permanent-delete', id })
-  }, [])
+    setConfirmAction({ type: "permanent-delete", id });
+  }, []);
 
   const handleConfirmPermanentDelete = useCallback(async () => {
-    const id = confirmAction?.id
-    setConfirmAction(null)
-    if (!id) return
+    const id = confirmAction?.id;
+    setConfirmAction(null);
+    if (!id) return;
 
-    const { error: err } = await permanentDeleteNote(id)
+    const { error: err } = await permanentDeleteNote(id);
     if (err) {
-      setToast({ message: `Delete failed: ${err}`, type: 'error' })
+      setToast({ message: `Delete failed: ${err}`, type: "error" });
     } else {
-      setToast({ message: 'Note permanently deleted', type: 'success' })
+      setToast({ message: "Note permanently deleted", type: "success" });
     }
-  }, [confirmAction, permanentDeleteNote])
+  }, [confirmAction, permanentDeleteNote]);
 
   // ── Empty Trash ────────────────────────────────────────────
   const handleEmptyTrashRequest = useCallback(() => {
-    setConfirmAction({ type: 'empty-trash' })
-  }, [])
+    setConfirmAction({ type: "empty-trash" });
+  }, []);
 
   const handleConfirmEmptyTrash = useCallback(async () => {
-    setConfirmAction(null)
+    setConfirmAction(null);
 
-    const { data: count, error: err } = await emptyTrash()
+    const { data: count, error: err } = await emptyTrash();
     if (err) {
-      setToast({ message: `Failed to empty trash: ${err}`, type: 'error' })
+      setToast({ message: `Failed to empty trash: ${err}`, type: "error" });
     } else {
       setToast({
-        message: `${count} note${count !== 1 ? 's' : ''} permanently deleted`,
-        type: 'success',
-      })
+        message: `${count} note${count !== 1 ? "s" : ""} permanently deleted`,
+        type: "success",
+      });
     }
-  }, [emptyTrash])
+  }, [emptyTrash]);
 
   // ── Loading / Error ────────────────────────────────────────
   if (loading) {
@@ -80,7 +83,7 @@ export default function Trash() {
         <PageHeader title="Trash" />
         <LoadingState message="Loading trash..." />
       </div>
-    )
+    );
   }
 
   if (error) {
@@ -91,7 +94,7 @@ export default function Trash() {
           <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -100,7 +103,7 @@ export default function Trash() {
         title="Trash"
         description={
           deletedNotes.length > 0
-            ? `${deletedNotes.length} note${deletedNotes.length !== 1 ? 's' : ''} in trash`
+            ? `${deletedNotes.length} note${deletedNotes.length !== 1 ? "s" : ""} in trash`
             : undefined
         }
       >
@@ -140,7 +143,7 @@ export default function Trash() {
       )}
 
       {/* Confirmation dialogs */}
-      {confirmAction?.type === 'permanent-delete' && (
+      {confirmAction?.type === "permanent-delete" && (
         <ConfirmDialog
           title="Permanently Delete"
           message="This note will be permanently deleted. This action cannot be undone."
@@ -150,10 +153,10 @@ export default function Trash() {
         />
       )}
 
-      {confirmAction?.type === 'empty-trash' && (
+      {confirmAction?.type === "empty-trash" && (
         <ConfirmDialog
           title="Empty Trash"
-          message={`All ${deletedNotes.length} note${deletedNotes.length !== 1 ? 's' : ''} in Trash will be permanently deleted. This cannot be undone.`}
+          message={`All ${deletedNotes.length} note${deletedNotes.length !== 1 ? "s" : ""} in Trash will be permanently deleted. This cannot be undone.`}
           confirmLabel="Empty Trash"
           onConfirm={handleConfirmEmptyTrash}
           onCancel={() => setConfirmAction(null)}
@@ -162,7 +165,7 @@ export default function Trash() {
 
       {/* Toast notifications */}
       {toast && (
-        <div className="fixed bottom-4 right-4 z-50 max-w-sm">
+        <div className="fixed bottom-16 right-4 z-50 max-w-sm">
           <Toast
             message={toast.message}
             type={toast.type}
@@ -171,5 +174,5 @@ export default function Trash() {
         </div>
       )}
     </div>
-  )
+  );
 }

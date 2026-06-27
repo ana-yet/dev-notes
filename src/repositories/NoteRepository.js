@@ -11,21 +11,21 @@
  * Storage format: A single JSON array under STORAGE_KEYS.NOTES.
  */
 
-import { getItem, setItem } from '../services/storage'
-import { STORAGE_KEYS } from '../constants'
-import { Note } from '../models'
-import logger from '../utils/logger'
+import { getItem, setItem } from "../services/storage";
+import { STORAGE_KEYS } from "../constants";
+import { Note } from "../models";
+import logger from "../utils/logger";
 
-const log = logger.create('NoteRepository')
+const log = logger.create("NoteRepository");
 
 // ── Internal helpers ──────────────────────────────────────────────────────
 
 async function loadAll() {
-  return await getItem(STORAGE_KEYS.NOTES, [])
+  return await getItem(STORAGE_KEYS.NOTES, []);
 }
 
 async function saveAll(notes) {
-  return await setItem(STORAGE_KEYS.NOTES, notes)
+  return await setItem(STORAGE_KEYS.NOTES, notes);
 }
 
 // ── Public API ────────────────────────────────────────────────────────────
@@ -37,11 +37,11 @@ async function saveAll(notes) {
  */
 export async function getAll() {
   try {
-    const notes = await loadAll()
-    return { data: notes, error: null }
+    const notes = await loadAll();
+    return { data: notes, error: null };
   } catch (err) {
-    log.error('getAll failed:', err)
-    return { data: [], error: 'Failed to load notes' }
+    log.error("getAll failed:", err);
+    return { data: [], error: "Failed to load notes" };
   }
 }
 
@@ -53,12 +53,12 @@ export async function getAll() {
  */
 export async function getById(id) {
   try {
-    const notes = await loadAll()
-    const note = notes.find((n) => n.id === id) || null
-    return { data: note, error: null }
+    const notes = await loadAll();
+    const note = notes.find((n) => n.id === id) || null;
+    return { data: note, error: null };
   } catch (err) {
-    log.error('getById failed:', err)
-    return { data: null, error: 'Failed to load note' }
+    log.error("getById failed:", err);
+    return { data: null, error: "Failed to load note" };
   }
 }
 
@@ -70,22 +70,22 @@ export async function getById(id) {
  */
 export async function create(data = {}) {
   try {
-    const note = Note.create(data)
-    const { valid, errors } = Note.validate(note)
+    const note = Note.create(data);
+    const { valid, errors } = Note.validate(note);
 
     if (!valid) {
-      return { data: null, error: errors.join(', ') }
+      return { data: null, error: errors.join(", ") };
     }
 
-    const notes = await loadAll()
-    notes.unshift(note) // newest first
-    await saveAll(notes)
+    const notes = await loadAll();
+    notes.unshift(note); // newest first
+    await saveAll(notes);
 
-    log.info('Note created:', note.id)
-    return { data: note, error: null }
+    log.info("Note created:", note.id);
+    return { data: note, error: null };
   } catch (err) {
-    log.error('create failed:', err)
-    return { data: null, error: 'Failed to create note' }
+    log.error("create failed:", err);
+    return { data: null, error: "Failed to create note" };
   }
 }
 
@@ -98,11 +98,11 @@ export async function create(data = {}) {
  */
 export async function update(id, data) {
   try {
-    const notes = await loadAll()
-    const index = notes.findIndex((n) => n.id === id)
+    const notes = await loadAll();
+    const index = notes.findIndex((n) => n.id === id);
 
     if (index === -1) {
-      return { data: null, error: 'Note not found' }
+      return { data: null, error: "Note not found" };
     }
 
     const updated = {
@@ -110,20 +110,20 @@ export async function update(id, data) {
       ...data,
       id, // prevent ID overwrite
       updatedAt: new Date().toISOString(),
-    }
+    };
 
-    const { valid, errors } = Note.validate(updated)
+    const { valid, errors } = Note.validate(updated);
     if (!valid) {
-      return { data: null, error: errors.join(', ') }
+      return { data: null, error: errors.join(", ") };
     }
 
-    notes[index] = updated
-    await saveAll(notes)
+    notes[index] = updated;
+    await saveAll(notes);
 
-    return { data: updated, error: null }
+    return { data: updated, error: null };
   } catch (err) {
-    log.error('update failed:', err)
-    return { data: null, error: 'Failed to update note' }
+    log.error("update failed:", err);
+    return { data: null, error: "Failed to update note" };
   }
 }
 
@@ -135,19 +135,19 @@ export async function update(id, data) {
  */
 export async function remove(id) {
   try {
-    const notes = await loadAll()
-    const filtered = notes.filter((n) => n.id !== id)
+    const notes = await loadAll();
+    const filtered = notes.filter((n) => n.id !== id);
 
     if (filtered.length === notes.length) {
-      return { data: false, error: 'Note not found' }
+      return { data: false, error: "Note not found" };
     }
 
-    await saveAll(filtered)
-    log.info('Note deleted:', id)
-    return { data: true, error: null }
+    await saveAll(filtered);
+    log.info("Note deleted:", id);
+    return { data: true, error: null };
   } catch (err) {
-    log.error('remove failed:', err)
-    return { data: false, error: 'Failed to delete note' }
+    log.error("remove failed:", err);
+    return { data: false, error: "Failed to delete note" };
   }
 }
 
@@ -158,7 +158,7 @@ export async function remove(id) {
  * @returns {Promise<{ data: Object|null, error: string|null }>}
  */
 export async function archive(id) {
-  return update(id, { isArchived: true })
+  return update(id, { isArchived: true });
 }
 
 /**
@@ -168,7 +168,7 @@ export async function archive(id) {
  * @returns {Promise<{ data: Object|null, error: string|null }>}
  */
 export async function restore(id) {
-  return update(id, { isArchived: false })
+  return update(id, { isArchived: false });
 }
 
 /**
@@ -185,7 +185,7 @@ export async function trash(id) {
     isDeleted: true,
     deletedAt: new Date().toISOString(),
     isPinned: false, // Unpin when trashing
-  })
+  });
 }
 
 /**
@@ -200,7 +200,7 @@ export async function restoreFromTrash(id) {
   return update(id, {
     isDeleted: false,
     deletedAt: null,
-  })
+  });
 }
 
 /**
@@ -210,12 +210,12 @@ export async function restoreFromTrash(id) {
  */
 export async function getDeleted() {
   try {
-    const notes = await loadAll()
-    const deleted = notes.filter((n) => n.isDeleted)
-    return { data: deleted, error: null }
+    const notes = await loadAll();
+    const deleted = notes.filter((n) => n.isDeleted);
+    return { data: deleted, error: null };
   } catch (err) {
-    log.error('getDeleted failed:', err)
-    return { data: [], error: 'Failed to load deleted notes' }
+    log.error("getDeleted failed:", err);
+    return { data: [], error: "Failed to load deleted notes" };
   }
 }
 
@@ -227,16 +227,16 @@ export async function getDeleted() {
  */
 export async function emptyTrash() {
   try {
-    const notes = await loadAll()
-    const active = notes.filter((n) => !n.isDeleted)
-    const removedCount = notes.length - active.length
+    const notes = await loadAll();
+    const active = notes.filter((n) => !n.isDeleted);
+    const removedCount = notes.length - active.length;
 
-    await saveAll(active)
-    log.info('Trash emptied:', removedCount, 'notes permanently deleted')
-    return { data: removedCount, error: null }
+    await saveAll(active);
+    log.info("Trash emptied:", removedCount, "notes permanently deleted");
+    return { data: removedCount, error: null };
   } catch (err) {
-    log.error('emptyTrash failed:', err)
-    return { data: 0, error: 'Failed to empty trash' }
+    log.error("emptyTrash failed:", err);
+    return { data: 0, error: "Failed to empty trash" };
   }
 }
 
@@ -247,7 +247,7 @@ export async function emptyTrash() {
  * @returns {Promise<{ data: Object|null, error: string|null }>}
  */
 export async function pin(id) {
-  return update(id, { isPinned: true })
+  return update(id, { isPinned: true });
 }
 
 /**
@@ -257,7 +257,7 @@ export async function pin(id) {
  * @returns {Promise<{ data: Object|null, error: string|null }>}
  */
 export async function unpin(id) {
-  return update(id, { isPinned: false })
+  return update(id, { isPinned: false });
 }
 
 /**
@@ -268,14 +268,14 @@ export async function unpin(id) {
  */
 export async function toggleFavorite(id) {
   try {
-    const { data: note, error } = await getById(id)
+    const { data: note, error } = await getById(id);
     if (error || !note) {
-      return { data: null, error: error || 'Note not found' }
+      return { data: null, error: error || "Note not found" };
     }
-    return update(id, { isFavorite: !note.isFavorite })
+    return update(id, { isFavorite: !note.isFavorite });
   } catch (err) {
-    log.error('toggleFavorite failed:', err)
-    return { data: null, error: 'Failed to toggle favorite' }
+    log.error("toggleFavorite failed:", err);
+    return { data: null, error: "Failed to toggle favorite" };
   }
 }
 
@@ -287,26 +287,26 @@ export async function toggleFavorite(id) {
  */
 export async function search(query) {
   try {
-    if (!query || typeof query !== 'string') {
-      return { data: [], error: null }
+    if (!query || typeof query !== "string") {
+      return { data: [], error: null };
     }
 
-    const notes = await loadAll()
-    const q = query.toLowerCase().trim()
+    const notes = await loadAll();
+    const q = query.toLowerCase().trim();
 
-    if (!q) return { data: notes, error: null }
+    if (!q) return { data: notes, error: null };
 
     const results = notes.filter(
       (n) =>
         n.title.toLowerCase().includes(q) ||
         n.content.toLowerCase().includes(q) ||
-        (n.url && n.url.toLowerCase().includes(q))
-    )
+        (n.url && n.url.toLowerCase().includes(q)),
+    );
 
-    return { data: results, error: null }
+    return { data: results, error: null };
   } catch (err) {
-    log.error('search failed:', err)
-    return { data: [], error: 'Failed to search notes' }
+    log.error("search failed:", err);
+    return { data: [], error: "Failed to search notes" };
   }
 }
 
@@ -318,63 +318,101 @@ export async function search(query) {
  */
 export async function getByUrl(url) {
   try {
-    if (!url || typeof url !== 'string') {
-      return { data: null, error: null }
+    if (!url || typeof url !== "string") {
+      return { data: null, error: null };
     }
 
-    const notes = await loadAll()
-    const normalUrl = url.trim().toLowerCase()
+    const notes = await loadAll();
+    const normalUrl = url.trim().toLowerCase();
 
-    const note = notes.find(
-      (n) => n.url && n.url.trim().toLowerCase() === normalUrl && !n.isDeleted
-    ) || null
+    const note =
+      notes.find(
+        (n) =>
+          n.url && n.url.trim().toLowerCase() === normalUrl && !n.isDeleted,
+      ) || null;
 
-    return { data: note, error: null }
+    return { data: note, error: null };
   } catch (err) {
-    log.error('getByUrl failed:', err)
-    return { data: null, error: 'Failed to find note by URL' }
+    log.error("getByUrl failed:", err);
+    return { data: null, error: "Failed to find note by URL" };
   }
 }
 
 /**
- * Creates a note for a specific web page.
+ * Creates a note from an in-memory draft.
  *
- * @param {Object} tab — Browser tab object with url, title, favIconUrl.
+ * @param {Object} draft — Draft note data with url, title, content.
  * @returns {Promise<{ data: Object|null, error: string|null }>}
  */
-export async function createForPage(tab) {
+export async function createFromDraft(draft) {
   try {
-    const url = tab?.url?.trim()
+    if (!draft || typeof draft !== "object") {
+      log.error("createFromDraft: invalid draft object:", draft);
+      return { data: null, error: "Invalid draft object" };
+    }
+
+    const url = draft.url?.trim();
     if (!url) {
-      return { data: null, error: 'No URL provided' }
+      log.error(
+        "createFromDraft: draft has no URL. Full draft:",
+        JSON.stringify({
+          id: draft.id,
+          url: draft.url,
+          title: draft.title,
+          favIconUrl: draft.favIconUrl,
+        }),
+      );
+      return { data: null, error: "No URL provided" };
     }
 
     // Prevent duplicate page notes for the same URL
-    const { data: existing } = await getByUrl(url)
+    const { data: existing } = await getByUrl(url);
     if (existing) {
-      log.info('Page note already exists for:', url)
-      return { data: existing, error: null }
+      log.info("Page note already exists for:", url);
+      return update(existing.id, {
+        title: draft.title?.trim() || existing.title || url,
+        content: draft.content || "",
+      });
     }
 
     const note = Note.create({
-      title: tab.title?.trim() || url,
-      content: '',
+      title: draft.title?.trim() || url,
+      content: draft.content || "",
+      folderId: draft.folderId || null,
+      tags: Array.isArray(draft.tags) ? draft.tags : [],
       url,
-    })
+    });
 
-    const { valid, errors } = Note.validate(note)
+    const { valid, errors } = Note.validate(note);
     if (!valid) {
-      return { data: null, error: errors.join(', ') }
+      return { data: null, error: errors.join(", ") };
     }
 
-    const notes = await loadAll()
-    notes.unshift(note)
-    await saveAll(notes)
+    const notes = await loadAll();
+    notes.unshift(note);
+    await saveAll(notes);
 
-    log.info('Page note created:', note.id, 'for', url)
-    return { data: note, error: null }
+    log.info("Page note created:", note.id, "for", url);
+    return { data: note, error: null };
   } catch (err) {
-    log.error('createForPage failed:', err)
-    return { data: null, error: 'Failed to create page note' }
+    log.error("createFromDraft failed:", err);
+    return { data: null, error: "Failed to create page note" };
   }
 }
+
+/**
+ * Backward-compatible alias for older callers that pass a browser tab.
+ *
+ * @param {Object} tab
+ * @returns {Promise<{ data: Object|null, error: string|null }>}
+ */
+export async function createForPage(tab) {
+  return createFromDraft({
+    title: tab?.title,
+    content: "",
+    url: tab?.url,
+    favIconUrl: tab?.favIconUrl,
+  });
+}
+
+export { trash as delete };

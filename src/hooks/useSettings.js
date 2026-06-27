@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
-import * as SettingsRepository from '../repositories/SettingsRepository'
-import { Settings as SettingsModel } from '../models'
+import { useState, useEffect, useCallback } from "react";
+import * as SettingsRepository from "../repositories/SettingsRepository";
+import { Settings as SettingsModel } from "../models";
 
 /**
  * useSettings — React hook for user preferences.
@@ -13,23 +13,26 @@ import { Settings as SettingsModel } from '../models'
  *   const { settings, loading, error, updateSettings } = useSettings()
  */
 export function useSettings() {
-  const [settings, setSettings] = useState(SettingsModel.getDefault())
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const [settings, setSettings] = useState(SettingsModel.getDefault());
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const refresh = useCallback(async () => {
-    setLoading(true)
-    setError(null)
+    setLoading(true);
+    setError(null);
 
-    const { data, error: err } = await SettingsRepository.get()
-    setSettings(data)
-    setError(err)
-    setLoading(false)
-  }, [])
+    const { data, error: err } = await SettingsRepository.get();
+    setSettings(data);
+    setError(err);
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
-    refresh()
-  }, [refresh])
+    async function load() {
+      await refresh();
+    }
+    load();
+  }, [refresh]);
 
   /**
    * Updates settings by merging partial data.
@@ -37,14 +40,11 @@ export function useSettings() {
    * @param {Object} partial — Fields to update (e.g. { fontSize: 'large' }).
    * @returns {Promise<{ data: Object, error: string|null }>}
    */
-  const updateSettings = useCallback(
-    async (partial) => {
-      const { data, error: err } = await SettingsRepository.update(partial)
-      if (!err) setSettings(data)
-      return { data, error: err }
-    },
-    []
-  )
+  const updateSettings = useCallback(async (partial) => {
+    const { data, error: err } = await SettingsRepository.update(partial);
+    if (!err) setSettings(data);
+    return { data, error: err };
+  }, []);
 
   return {
     settings,
@@ -52,5 +52,5 @@ export function useSettings() {
     error,
     updateSettings,
     refresh,
-  }
+  };
 }

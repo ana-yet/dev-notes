@@ -11,4 +11,7 @@
 export * as NoteRepository from './NoteRepository'
 export * as FolderRepository from './FolderRepository'
 export * as SettingsRepository from './SettingsRepository'
+export * as BookmarkRepository from './BookmarkRepository'
+export * as HighlightRepository from './HighlightRepository'
+export * as SnippetRepository from './SnippetRepository'
 export { seedIfNeeded } from './seed'

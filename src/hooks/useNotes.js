@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
-import * as NoteRepository from '../repositories/NoteRepository'
-import { seedIfNeeded } from '../repositories/seed'
+import { useState, useEffect, useCallback } from "react";
+import * as NoteRepository from "../repositories/NoteRepository";
+import { seedIfNeeded } from "../repositories/seed";
 
 /**
  * useNotes — React hook for note CRUD operations.
@@ -16,133 +16,137 @@ import { seedIfNeeded } from '../repositories/seed'
  *   - deletedNotes: notes in Trash
  */
 export function useNotes() {
-  const [allNotes, setAllNotes] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const [allNotes, setAllNotes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   // Derived: active notes (not in trash)
-  const notes = allNotes.filter((n) => !n.isDeleted)
+  const notes = allNotes.filter((n) => !n.isDeleted);
   // Derived: notes in trash
-  const deletedNotes = allNotes.filter((n) => n.isDeleted)
+  const deletedNotes = allNotes.filter((n) => n.isDeleted);
 
   /**
    * Loads all notes from the repository.
    * Also triggers seed data if this is the first launch.
    */
   const refresh = useCallback(async () => {
-    setLoading(true)
-    setError(null)
+    setLoading(true);
+    setError(null);
 
     // Seed welcome data on first launch
-    await seedIfNeeded()
+    await seedIfNeeded();
 
-    const { data, error: err } = await NoteRepository.getAll()
-    setAllNotes(data)
-    setError(err)
-    setLoading(false)
-  }, [])
+    const { data, error: err } = await NoteRepository.getAll();
+    setAllNotes(data);
+    setError(err);
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
-    refresh()
-  }, [refresh])
+    async function load() {
+      await refresh();
+    }
+    load();
+  }, [refresh]);
 
   const createNote = useCallback(
     async (data) => {
-      const { data: note, error: err } = await NoteRepository.create(data)
-      if (!err) await refresh()
-      return { data: note, error: err }
+      const { data: note, error: err } = await NoteRepository.create(data);
+      if (!err) await refresh();
+      return { data: note, error: err };
     },
-    [refresh]
-  )
+    [refresh],
+  );
 
   const updateNote = useCallback(
     async (id, data) => {
-      const { data: note, error: err } = await NoteRepository.update(id, data)
-      if (!err) await refresh()
-      return { data: note, error: err }
+      const { data: note, error: err } = await NoteRepository.update(id, data);
+      if (!err) await refresh();
+      return { data: note, error: err };
     },
-    [refresh]
-  )
+    [refresh],
+  );
 
   const deleteNote = useCallback(
     async (id) => {
-      const { data: note, error: err } = await NoteRepository.trash(id)
-      if (!err) await refresh()
-      return { data: note, error: err }
+      const { data: note, error: err } = await NoteRepository.trash(id);
+      if (!err) await refresh();
+      return { data: note, error: err };
     },
-    [refresh]
-  )
+    [refresh],
+  );
 
   const permanentDeleteNote = useCallback(
     async (id) => {
-      const { data: ok, error: err } = await NoteRepository.remove(id)
-      if (!err) await refresh()
-      return { data: ok, error: err }
+      const { data: ok, error: err } = await NoteRepository.remove(id);
+      if (!err) await refresh();
+      return { data: ok, error: err };
     },
-    [refresh]
-  )
+    [refresh],
+  );
 
   const archiveNote = useCallback(
     async (id) => {
-      const { data: note, error: err } = await NoteRepository.archive(id)
-      if (!err) await refresh()
-      return { data: note, error: err }
+      const { data: note, error: err } = await NoteRepository.archive(id);
+      if (!err) await refresh();
+      return { data: note, error: err };
     },
-    [refresh]
-  )
+    [refresh],
+  );
 
   const restoreNote = useCallback(
     async (id) => {
-      const { data: note, error: err } = await NoteRepository.restore(id)
-      if (!err) await refresh()
-      return { data: note, error: err }
+      const { data: note, error: err } = await NoteRepository.restore(id);
+      if (!err) await refresh();
+      return { data: note, error: err };
     },
-    [refresh]
-  )
+    [refresh],
+  );
 
   const restoreFromTrash = useCallback(
     async (id) => {
-      const { data: note, error: err } = await NoteRepository.restoreFromTrash(id)
-      if (!err) await refresh()
-      return { data: note, error: err }
+      const { data: note, error: err } =
+        await NoteRepository.restoreFromTrash(id);
+      if (!err) await refresh();
+      return { data: note, error: err };
     },
-    [refresh]
-  )
+    [refresh],
+  );
 
   const emptyTrash = useCallback(async () => {
-    const { data: count, error: err } = await NoteRepository.emptyTrash()
-    if (!err) await refresh()
-    return { data: count, error: err }
-  }, [refresh])
+    const { data: count, error: err } = await NoteRepository.emptyTrash();
+    if (!err) await refresh();
+    return { data: count, error: err };
+  }, [refresh]);
 
   const togglePin = useCallback(
     async (id) => {
-      const note = notes.find((n) => n.id === id)
-      if (!note) return { data: null, error: 'Note not found' }
+      const note = notes.find((n) => n.id === id);
+      if (!note) return { data: null, error: "Note not found" };
 
       const { data, error: err } = note.isPinned
         ? await NoteRepository.unpin(id)
-        : await NoteRepository.pin(id)
+        : await NoteRepository.pin(id);
 
-      if (!err) await refresh()
-      return { data, error: err }
+      if (!err) await refresh();
+      return { data, error: err };
     },
-    [notes, refresh]
-  )
+    [notes, refresh],
+  );
 
   const toggleFavorite = useCallback(
     async (id) => {
-      const { data, error: err } = await NoteRepository.toggleFavorite(id)
-      if (!err) await refresh()
-      return { data, error: err }
+      const { data, error: err } = await NoteRepository.toggleFavorite(id);
+      if (!err) await refresh();
+      return { data, error: err };
     },
-    [refresh]
-  )
+    [refresh],
+  );
 
   const searchNotes = useCallback(async (query) => {
-    const { data, error: err } = await NoteRepository.search(query)
-    return { data, error: err }
-  }, [])
+    const { data, error: err } = await NoteRepository.search(query);
+    return { data, error: err };
+  }, []);
 
   return {
     notes,
@@ -161,5 +165,5 @@ export function useNotes() {
     toggleFavorite,
     searchNotes,
     refresh,
-  }
+  };
 }

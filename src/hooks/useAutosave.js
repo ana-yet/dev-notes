@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from "react";
 
 /**
  * useAutosave — Debounced automatic saving with status tracking.
@@ -32,108 +32,99 @@ import { useState, useEffect, useRef, useCallback } from 'react'
  * @returns {{ schedule, saveNow, cancel, saveStatus, isSaving }}
  */
 
-const STATUS_RESET_DELAY = 2500
+const STATUS_RESET_DELAY = 2500;
 
 export function useAutosave({ onSave, delay = 800 }) {
-  const [saveStatus, setSaveStatus] = useState('idle')
+  const [saveStatus, setSaveStatus] = useState("idle");
 
   // ── Refs for timer management ──────────────────────────────
-  const debounceTimerRef = useRef(null)
-  const statusTimerRef = useRef(null)
-  const isSavingRef = useRef(false)
-  const queuedDraftRef = useRef(null)
+  const debounceTimerRef = useRef(null);
+  const statusTimerRef = useRef(null);
+  const isSavingRef = useRef(false);
+  const queuedDraftRef = useRef(null);
 
   // ── Cancel pending debounce timer ──────────────────────────
-  const cancel = useCallback(() => {
+  const cancel = () => {
     if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current)
-      debounceTimerRef.current = null
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
     }
     if (statusTimerRef.current) {
-      clearTimeout(statusTimerRef.current)
-      statusTimerRef.current = null
+      clearTimeout(statusTimerRef.current);
+      statusTimerRef.current = null;
     }
-  }, [])
+  };
 
   // ── Execute save (internal) ────────────────────────────────
-  const executeSave = useCallback(
-    async (draft) => {
-      if (isSavingRef.current) {
-        // A save is already running — queue this one
-        queuedDraftRef.current = draft
-        return
+  const executeSave = async (draft) => {
+    if (isSavingRef.current) {
+      // A save is already running — queue this one
+      queuedDraftRef.current = draft;
+      return;
+    }
+
+    isSavingRef.current = true;
+    setSaveStatus("saving");
+
+    try {
+      const result = await onSave(draft);
+
+      if (result?.error) {
+        setSaveStatus("failed");
+      } else {
+        setSaveStatus("saved");
+        // Reset "Saved" → "idle" after a delay
+        statusTimerRef.current = setTimeout(() => {
+          setSaveStatus((prev) => (prev === "saved" ? "idle" : prev));
+          statusTimerRef.current = null;
+        }, STATUS_RESET_DELAY);
       }
+    } catch {
+      setSaveStatus("failed");
+    } finally {
+      isSavingRef.current = false;
 
-      isSavingRef.current = true
-      setSaveStatus('saving')
-
-      try {
-        const result = await onSave(draft)
-
-        if (result?.error) {
-          setSaveStatus('failed')
-        } else {
-          setSaveStatus('saved')
-          // Reset "Saved" → "idle" after a delay
-          statusTimerRef.current = setTimeout(() => {
-            setSaveStatus((prev) => (prev === 'saved' ? 'idle' : prev))
-            statusTimerRef.current = null
-          }, STATUS_RESET_DELAY)
-        }
-      } catch {
-        setSaveStatus('failed')
-      } finally {
-        isSavingRef.current = false
-
-        // Process queued save if any
-        if (queuedDraftRef.current) {
-          const nextDraft = queuedDraftRef.current
-          queuedDraftRef.current = null
-          // Small delay to let React batch the status update
-          setTimeout(() => executeSave(nextDraft), 50)
-        }
+      // Process queued save if any
+      if (queuedDraftRef.current) {
+        const nextDraft = queuedDraftRef.current;
+        queuedDraftRef.current = null;
+        // Small delay to let React batch the status update
+        setTimeout(() => executeSave(nextDraft), 50);
       }
-    },
-    [onSave]
-  )
+    }
+  };
 
   // ── Schedule autosave (debounced) ──────────────────────────
-  const schedule = useCallback(
-    (draft) => {
-      cancel()
+  const schedule = (draft) => {
+    cancel();
 
-      // Reset status from previous save result when new edits arrive
-      if (saveStatus === 'saved' || saveStatus === 'failed') {
-        setSaveStatus('idle')
-      }
+    // Reset status from previous save result when new edits arrive
+    if (saveStatus === "saved" || saveStatus === "failed") {
+      setSaveStatus("idle");
+    }
 
-      debounceTimerRef.current = setTimeout(() => {
-        debounceTimerRef.current = null
-        executeSave(draft)
-      }, delay)
-    },
-    [cancel, executeSave, delay, saveStatus]
-  )
+    debounceTimerRef.current = setTimeout(() => {
+      debounceTimerRef.current = null;
+      executeSave(draft);
+    }, delay);
+  };
 
   // ── Save immediately (manual save) ─────────────────────────
-  const saveNow = useCallback(
-    async (draft) => {
-      cancel()
-      await executeSave(draft)
-    },
-    [cancel, executeSave]
-  )
+  const saveNow = async (draft) => {
+    cancel();
+    await executeSave(draft);
+  };
 
   // ── Cleanup on unmount ─────────────────────────────────────
   useEffect(() => {
-    return () => cancel()
-  }, [cancel])
+    return () => cancel();
+  });
 
   return {
     schedule,
     saveNow,
     cancel,
     saveStatus,
-    isSaving: isSavingRef.current && saveStatus === 'saving',
-  }
+    isSaving: saveStatus === "saving",
+  };
 }

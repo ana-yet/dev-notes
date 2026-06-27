@@ -1,13 +1,9 @@
 import { HashRouter, Routes, Route } from 'react-router-dom'
 import { ThemeProvider } from '../contexts/ThemeContext'
 import Layout from '../components/Layout'
-import Dashboard from '../pages/Dashboard'
 import Notes from '../pages/Notes'
 import PageNotes from '../pages/PageNotes'
-import ReadingList from '../pages/ReadingList'
-import Snippets from '../pages/Snippets'
-import Highlights from '../pages/Highlights'
-import Bookmarks from '../pages/Bookmarks'
+import Library from '../pages/Library'
 import Settings from '../pages/Settings'
 import Trash from '../pages/Trash'
 
@@ -27,13 +23,10 @@ export default function SidePanel() {
       <HashRouter>
         <Routes>
           <Route element={<Layout />}>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/" element={<Notes />} />
             <Route path="/notes" element={<Notes />} />
             <Route path="/page-notes" element={<PageNotes />} />
-            <Route path="/reading-list" element={<ReadingList />} />
-            <Route path="/snippets" element={<Snippets />} />
-            <Route path="/highlights" element={<Highlights />} />
-            <Route path="/bookmarks" element={<Bookmarks />} />
+            <Route path="/library" element={<Library />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/trash" element={<Trash />} />
           </Route>

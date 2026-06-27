@@ -77,7 +77,7 @@ export default function NotesList({ notes, folders, loading, error, selectedNote
           <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 px-1">
             Pinned
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-2.5">
             {pinned.map((note) => (
               <NoteCard
                 key={note.id}
@@ -99,7 +99,7 @@ export default function NotesList({ notes, folders, loading, error, selectedNote
               Recent
             </h2>
           )}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-2.5">
             {unpinned.map((note) => (
               <NoteCard
                 key={note.id}

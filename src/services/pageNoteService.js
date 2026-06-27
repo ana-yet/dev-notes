@@ -12,13 +12,189 @@
  *   - The service is testable and reusable outside React.
  */
 
-import { getCurrentTab } from "./browser/tabs";
+import {
+  getActiveTabForWindow,
+  getCurrentTab,
+  getTab,
+  normalizeTab,
+} from "./browser/tabs";
 import logger from "../utils/logger";
 
 const log = logger.create("PageNoteService");
 
 let listeners = new Set();
 let cleanupFn = null;
+let currentPageTab = null;
+let lastAcceptedTimestamp = 0;
+let lastAcceptedTabId = null;
+let eventSequence = 0;
+
+function getTimestamp() {
+  eventSequence += 1;
+  return Date.now() + eventSequence / 1000;
+}
+
+function summarizeTab(tab) {
+  if (!tab) return null;
+
+  return {
+    id: tab.id,
+    windowId: tab.windowId,
+    url: tab.url,
+    title: tab.title,
+    favIconUrl: tab.favIconUrl,
+    active: tab.active,
+  };
+}
+
+function isSupportedUrl(url) {
+  if (!url || typeof url !== "string") return false;
+
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function validateCandidate(tab, timestamp) {
+  const failures = [];
+
+  if (!tab) failures.push("tab missing");
+  if (tab && !Number.isInteger(tab.id)) failures.push("tab.id missing");
+  if (tab && !tab.url) failures.push("tab.url missing");
+  if (tab && !tab.title) failures.push("tab.title missing");
+  if (tab?.url && !isSupportedUrl(tab.url)) failures.push("unsupported URL");
+  if (timestamp <= lastAcceptedTimestamp) failures.push("stale event");
+
+  return {
+    valid: failures.length === 0,
+    failures,
+  };
+}
+
+function classifyEvent(eventName, tab, details = {}) {
+  if (eventName === "tabs.onUpdated") {
+    if (!tab?.active)
+      return { action: "ignore", reason: "updated tab is not active" };
+    if (!currentPageTab)
+      return { action: "replace", reason: "initial active updated tab" };
+    if (tab.id === currentPageTab.id)
+      return { action: "refresh", reason: "metadata update for current page" };
+    return {
+      action: "ignore",
+      reason: "metadata update belongs to a different active tab",
+    };
+  }
+
+  if (eventName === "tabs.onActivated") {
+    return { action: "replace", reason: "browser activated a tab" };
+  }
+
+  if (eventName === "windows.onFocusChanged") {
+    if (details.windowId === chrome.windows.WINDOW_ID_NONE) {
+      return { action: "ignore", reason: "no focused browser window" };
+    }
+    return { action: "replace", reason: "focused window changed" };
+  }
+
+  if (eventName === "initialQuery") {
+    return { action: "replace", reason: "initial active page lookup" };
+  }
+
+  return { action: "ignore", reason: "unhandled event" };
+}
+
+function logTransition({
+  eventName,
+  timestamp,
+  candidate,
+  candidateKeys,
+  classification,
+  validation,
+  accepted,
+  previous,
+  next,
+  details = {},
+}) {
+  const level = accepted ? "info" : "warn";
+
+  log[level]("[ActiveTabState]", {
+    eventName,
+    tabId: candidate?.id ?? null,
+    windowId: candidate?.windowId ?? details.windowId ?? null,
+    url: candidate?.url ?? null,
+    title: candidate?.title ?? null,
+    favIconUrl: candidate?.favIconUrl ?? null,
+    timestamp,
+    objectKeys: candidateKeys,
+    previousActiveTab: summarizeTab(previous),
+    nextActiveTab: summarizeTab(next),
+    classification,
+    validation,
+    accepted,
+    ignored: !accepted,
+    lastAcceptedTimestamp,
+    lastAcceptedTabId,
+    details,
+  });
+}
+
+function acceptCandidate(tab, timestamp) {
+  currentPageTab = tab;
+  lastAcceptedTimestamp = timestamp;
+  lastAcceptedTabId = tab.id;
+}
+
+function evaluateCandidate(
+  eventName,
+  tab,
+  {
+    timestamp = getTimestamp(),
+    candidateKeys = tab ? Object.keys(tab) : [],
+    details = {},
+  } = {},
+) {
+  const candidate = normalizeTab(tab);
+  const previous = currentPageTab;
+  const classification = classifyEvent(eventName, candidate, details);
+  const validation = validateCandidate(candidate, timestamp);
+  const accepted = classification.action !== "ignore" && validation.valid;
+
+  if (accepted) {
+    acceptCandidate(candidate, timestamp);
+  }
+
+  logTransition({
+    eventName,
+    timestamp,
+    candidate,
+    candidateKeys,
+    classification,
+    validation,
+    accepted,
+    previous,
+    next: currentPageTab,
+    details,
+  });
+
+  if (accepted) {
+    notifyListeners(currentPageTab);
+  }
+
+  return currentPageTab;
+}
+
+async function initializeActivePage() {
+  const timestamp = getTimestamp();
+  const tab = await getCurrentTab();
+  return evaluateCandidate("initialQuery", tab, {
+    timestamp,
+    candidateKeys: tab ? Object.keys(tab) : [],
+    details: { source: "getCurrentTab" },
+  });
+}
 
 /**
  * Notifies all registered listeners of a tab change.
@@ -47,14 +223,18 @@ function startListening() {
   }
 
   const handleTabActivated = (activeInfo) => {
+    const timestamp = getTimestamp();
     try {
-      chrome.tabs.get(activeInfo.tabId, (tab) => {
-        if (chrome.runtime?.lastError) {
-          log.error("tabs.get failed:", chrome.runtime.lastError.message);
-          return;
-        }
-        log.debug("Tab activated:", tab?.title);
-        notifyListeners(tab || null);
+      getTab(activeInfo.tabId).then((tab) => {
+        evaluateCandidate("tabs.onActivated", tab, {
+          timestamp,
+          candidateKeys: tab ? Object.keys(tab) : [],
+          details: {
+            source: "getTab",
+            tabId: activeInfo.tabId,
+            windowId: activeInfo.windowId,
+          },
+        });
       });
     } catch (err) {
       log.error("onActivated error:", err);
@@ -62,19 +242,73 @@ function startListening() {
   };
 
   const handleTabUpdated = (tabId, changeInfo, tab) => {
-    if (!tab.active) return;
-    if (changeInfo.url || changeInfo.title || changeInfo.favIconUrl) {
-      log.debug("Active tab updated:", changeInfo.url || changeInfo.title);
-      notifyListeners(tab);
+    const timestamp = getTimestamp();
+
+    if (
+      !changeInfo.url &&
+      !changeInfo.title &&
+      !changeInfo.favIconUrl &&
+      changeInfo.status !== "complete"
+    ) {
+      evaluateCandidate("tabs.onUpdated", tab, {
+        timestamp,
+        candidateKeys: tab ? Object.keys(tab) : [],
+        details: {
+          source: "eventPayload",
+          tabId,
+          changeInfo,
+        },
+      });
+      return;
+    }
+
+    evaluateCandidate("tabs.onUpdated", tab, {
+      timestamp,
+      candidateKeys: tab ? Object.keys(tab) : [],
+      details: {
+        source: "eventPayload",
+        tabId,
+        changeInfo,
+      },
+    });
+  };
+
+  // Re-query active tab when the user switches between Chrome windows.
+  // onActivated only fires for tab switches within the same window.
+  const handleWindowFocusChanged = async (windowId) => {
+    const timestamp = getTimestamp();
+    if (windowId === chrome.windows.WINDOW_ID_NONE) {
+      evaluateCandidate("windows.onFocusChanged", null, {
+        timestamp,
+        candidateKeys: [],
+        details: { windowId },
+      });
+      return;
+    }
+
+    try {
+      const tab = await getActiveTabForWindow(windowId);
+      evaluateCandidate("windows.onFocusChanged", tab, {
+        timestamp,
+        candidateKeys: tab ? Object.keys(tab) : [],
+        details: {
+          source: "getActiveTabForWindow",
+          windowId,
+        },
+      });
+    } catch (err) {
+      log.error("onFocusChanged error:", err);
     }
   };
 
   chrome.tabs.onActivated.addListener(handleTabActivated);
   chrome.tabs.onUpdated.addListener(handleTabUpdated);
+  chrome.windows.onFocusChanged.addListener(handleWindowFocusChanged);
 
   cleanupFn = () => {
     chrome.tabs.onActivated.removeListener(handleTabActivated);
     chrome.tabs.onUpdated.removeListener(handleTabUpdated);
+    chrome.windows.onFocusChanged.removeListener(handleWindowFocusChanged);
     cleanupFn = null;
   };
 
@@ -88,8 +322,8 @@ function startListening() {
  */
 export async function getActiveTab() {
   try {
-    const tab = await getCurrentTab();
-    return tab || null;
+    if (currentPageTab) return currentPageTab;
+    return await initializeActivePage();
   } catch (err) {
     log.error("getActiveTab failed:", err);
     return null;
@@ -108,6 +342,10 @@ export async function getActiveTab() {
 export function subscribe(callback) {
   listeners.add(callback);
   startListening();
+
+  if (currentPageTab) {
+    callback(currentPageTab);
+  }
 
   // Return unsubscribe function
   return () => {
