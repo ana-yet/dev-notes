@@ -13,7 +13,7 @@
 
 import { getItem, setItem } from "../services/storage";
 import { STORAGE_KEYS } from "../constants";
-import { Note } from "../models";
+import * as Note from "../models/note";
 import logger from "../utils/logger";
 
 const log = logger.create("NoteRepository");
@@ -23,7 +23,6 @@ const log = logger.create("NoteRepository");
 async function loadAll() {
   return await getItem(STORAGE_KEYS.NOTES, []);
 }
-
 async function saveAll(notes) {
   return await setItem(STORAGE_KEYS.NOTES, notes);
 }
@@ -42,23 +41,6 @@ export async function getAll() {
   } catch (err) {
     log.error("getAll failed:", err);
     return { data: [], error: "Failed to load notes" };
-  }
-}
-
-/**
- * Returns a single note by ID.
- *
- * @param {string} id
- * @returns {Promise<{ data: Object|null, error: string|null }>}
- */
-export async function getById(id) {
-  try {
-    const notes = await loadAll();
-    const note = notes.find((n) => n.id === id) || null;
-    return { data: note, error: null };
-  } catch (err) {
-    log.error("getById failed:", err);
-    return { data: null, error: "Failed to load note" };
   }
 }
 
@@ -152,26 +134,6 @@ export async function remove(id) {
 }
 
 /**
- * Soft-deletes a note by marking it as archived.
- *
- * @param {string} id
- * @returns {Promise<{ data: Object|null, error: string|null }>}
- */
-export async function archive(id) {
-  return update(id, { isArchived: true });
-}
-
-/**
- * Restores an archived note.
- *
- * @param {string} id
- * @returns {Promise<{ data: Object|null, error: string|null }>}
- */
-export async function restore(id) {
-  return update(id, { isArchived: false });
-}
-
-/**
  * Moves a note to Trash (soft delete).
  *
  * Sets isDeleted = true and deletedAt = current timestamp.
@@ -204,22 +166,6 @@ export async function restoreFromTrash(id) {
 }
 
 /**
- * Returns all notes currently in Trash.
- *
- * @returns {Promise<{ data: Object[], error: string|null }>}
- */
-export async function getDeleted() {
-  try {
-    const notes = await loadAll();
-    const deleted = notes.filter((n) => n.isDeleted);
-    return { data: deleted, error: null };
-  } catch (err) {
-    log.error("getDeleted failed:", err);
-    return { data: [], error: "Failed to load deleted notes" };
-  }
-}
-
-/**
  * Permanently removes all notes in Trash.
  * This is irreversible — the data is gone from storage.
  *
@@ -237,45 +183,6 @@ export async function emptyTrash() {
   } catch (err) {
     log.error("emptyTrash failed:", err);
     return { data: 0, error: "Failed to empty trash" };
-  }
-}
-
-/**
- * Pins a note so it appears at the top of lists.
- *
- * @param {string} id
- * @returns {Promise<{ data: Object|null, error: string|null }>}
- */
-export async function pin(id) {
-  return update(id, { isPinned: true });
-}
-
-/**
- * Unpins a note.
- *
- * @param {string} id
- * @returns {Promise<{ data: Object|null, error: string|null }>}
- */
-export async function unpin(id) {
-  return update(id, { isPinned: false });
-}
-
-/**
- * Toggles the favorite status of a note.
- *
- * @param {string} id
- * @returns {Promise<{ data: Object|null, error: string|null }>}
- */
-export async function toggleFavorite(id) {
-  try {
-    const { data: note, error } = await getById(id);
-    if (error || !note) {
-      return { data: null, error: error || "Note not found" };
-    }
-    return update(id, { isFavorite: !note.isFavorite });
-  } catch (err) {
-    log.error("toggleFavorite failed:", err);
-    return { data: null, error: "Failed to toggle favorite" };
   }
 }
 
@@ -399,20 +306,3 @@ export async function createFromDraft(draft) {
     return { data: null, error: "Failed to create page note" };
   }
 }
-
-/**
- * Backward-compatible alias for older callers that pass a browser tab.
- *
- * @param {Object} tab
- * @returns {Promise<{ data: Object|null, error: string|null }>}
- */
-export async function createForPage(tab) {
-  return createFromDraft({
-    title: tab?.title,
-    content: "",
-    url: tab?.url,
-    favIconUrl: tab?.favIconUrl,
-  });
-}
-
-export { trash as delete };

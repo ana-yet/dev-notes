@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Globe,
   Bookmark,
@@ -20,6 +20,24 @@ import * as BookmarkRepository from "../repositories/BookmarkRepository";
 import logger from "../utils/logger";
 
 const log = logger.create("PageNotes");
+
+function areRecordArraysEqual(previous, next) {
+  if (previous === next) return true;
+  if (previous.length !== next.length) return false;
+
+  return previous.every((item, index) => {
+    const candidate = next[index];
+    const keys = Object.keys(item);
+    if (!candidate || keys.length !== Object.keys(candidate).length) return false;
+    return keys.every((key) => {
+      const left = item[key];
+      const right = candidate[key];
+      return Array.isArray(left) && Array.isArray(right)
+        ? left.length === right.length && left.every((value, i) => value === right[i])
+        : Object.is(left, right);
+    });
+  });
+}
 
 export default function PageNotes() {
   const { notes, loading: notesLoading, refresh } = useNotes();
@@ -44,16 +62,28 @@ export default function PageNotes() {
 
   // Use activeTab directly — no mock fallback that masks bugs
   const currentTab = activeTab;
+  const currentUrl = currentTab?.url;
+  const currentHostname = useMemo(() => {
+    try {
+      return currentUrl ? new URL(currentUrl).hostname : "";
+    } catch {
+      return "";
+    }
+  }, [currentUrl]);
 
   // Load highlights & bookmarks matching current URL
   useEffect(() => {
     let cancelled = false;
 
     async function loadResources() {
-      if (!currentTab?.url) {
+      if (!currentUrl) {
         if (!cancelled) {
-          setHighlights([]);
-          setBookmarks([]);
+          setHighlights((previous) =>
+            previous.length === 0 ? previous : [],
+          );
+          setBookmarks((previous) =>
+            previous.length === 0 ? previous : [],
+          );
         }
         return;
       }
@@ -65,10 +95,16 @@ export default function PageNotes() {
         ]);
         if (!cancelled) {
           if (!resH.error) {
-            setHighlights(resH.data.filter((h) => h.url === currentTab.url));
+            const next = resH.data.filter((h) => h.url === currentUrl);
+            setHighlights((previous) =>
+              areRecordArraysEqual(previous, next) ? previous : next,
+            );
           }
           if (!resB.error) {
-            setBookmarks(resB.data.filter((b) => b.url === currentTab.url));
+            const next = resB.data.filter((b) => b.url === currentUrl);
+            setBookmarks((previous) =>
+              areRecordArraysEqual(previous, next) ? previous : next,
+            );
           }
         }
       } catch (err) {
@@ -81,18 +117,13 @@ export default function PageNotes() {
     return () => {
       cancelled = true;
     };
-  }, [currentTab?.url]);
+  }, [currentUrl]);
 
-  const isBookmarked = useMemo(() => {
-    return bookmarks.some((b) => !b.isReadingList);
-  }, [bookmarks]);
-
-  const isSavedToReadLater = useMemo(() => {
-    return bookmarks.some((b) => b.isReadingList);
-  }, [bookmarks]);
+  const isBookmarked = bookmarks.some((b) => !b.isReadingList);
+  const isSavedToReadLater = bookmarks.some((b) => b.isReadingList);
 
   // Save handler for editor
-  const handleSave = async ({ title, content }) => {
+  const handleSave = useCallback(async ({ title, content }) => {
     setSaveError(null);
 
     const { data, error: err } = await savePageNote({
@@ -105,7 +136,7 @@ export default function PageNotes() {
       setSaveError(err);
     }
     return { data, error: err };
-  };
+  }, [savePageNote]);
 
   // Add bookmark quick action
   const handleAddBookmark = async () => {
@@ -181,7 +212,6 @@ export default function PageNotes() {
 
   function showToast(message, type = "success") {
     setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
   }
 
   const isLoading = notesLoading || tabLoading;
@@ -226,7 +256,7 @@ export default function PageNotes() {
           </div>
           <div className="flex-1 min-w-0">
             <span className="text-[10px] font-semibold text-violet-600 dark:text-violet-400 uppercase tracking-wider">
-              Active Context
+              Active Context{currentHostname ? ` · ${currentHostname}` : ""}
             </span>
             <h2 className="text-sm font-bold text-gray-900 dark:text-white truncate mt-0.5 leading-snug">
               {currentTab.title || "Untitled Page"}
@@ -414,6 +444,7 @@ export default function PageNotes() {
           <Toast
             message={toast.message}
             type={toast.type}
+            duration={3000}
             onClose={() => setToast(null)}
           />
         </div>

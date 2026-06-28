@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
 /**
  * useAutosave — Debounced automatic saving with status tracking.
@@ -40,11 +40,15 @@ export function useAutosave({ onSave, delay = 800 }) {
   // ── Refs for timer management ──────────────────────────────
   const debounceTimerRef = useRef(null);
   const statusTimerRef = useRef(null);
+  const queueTimerRef = useRef(null);
   const isSavingRef = useRef(false);
   const queuedDraftRef = useRef(null);
+  const onSaveRef = useRef(onSave);
+  const mountedRef = useRef(true);
 
   // ── Cancel pending debounce timer ──────────────────────────
-  const cancel = () => {
+  const cancel = useCallback(() => {
+    queuedDraftRef.current = null;
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = null;
@@ -53,10 +57,14 @@ export function useAutosave({ onSave, delay = 800 }) {
       clearTimeout(statusTimerRef.current);
       statusTimerRef.current = null;
     }
-  };
+    if (queueTimerRef.current) {
+      clearTimeout(queueTimerRef.current);
+      queueTimerRef.current = null;
+    }
+  }, []);
 
   // ── Execute save (internal) ────────────────────────────────
-  const executeSave = async (draft) => {
+  const executeSave = useCallback(async function execute(draft) {
     if (isSavingRef.current) {
       // A save is already running — queue this one
       queuedDraftRef.current = draft;
@@ -64,23 +72,25 @@ export function useAutosave({ onSave, delay = 800 }) {
     }
 
     isSavingRef.current = true;
-    setSaveStatus("saving");
+    if (mountedRef.current) setSaveStatus("saving");
 
     try {
-      const result = await onSave(draft);
+      const result = await onSaveRef.current(draft);
 
       if (result?.error) {
-        setSaveStatus("failed");
+        if (mountedRef.current) setSaveStatus("failed");
       } else {
-        setSaveStatus("saved");
+        if (mountedRef.current) setSaveStatus("saved");
         // Reset "Saved" → "idle" after a delay
         statusTimerRef.current = setTimeout(() => {
-          setSaveStatus((prev) => (prev === "saved" ? "idle" : prev));
+          if (mountedRef.current) {
+            setSaveStatus((prev) => (prev === "saved" ? "idle" : prev));
+          }
           statusTimerRef.current = null;
         }, STATUS_RESET_DELAY);
       }
     } catch {
-      setSaveStatus("failed");
+      if (mountedRef.current) setSaveStatus("failed");
     } finally {
       isSavingRef.current = false;
 
@@ -89,36 +99,47 @@ export function useAutosave({ onSave, delay = 800 }) {
         const nextDraft = queuedDraftRef.current;
         queuedDraftRef.current = null;
         // Small delay to let React batch the status update
-        setTimeout(() => executeSave(nextDraft), 50);
+        queueTimerRef.current = setTimeout(() => {
+          queueTimerRef.current = null;
+          execute(nextDraft);
+        }, 50);
       }
     }
-  };
+  }, []);
 
   // ── Schedule autosave (debounced) ──────────────────────────
-  const schedule = (draft) => {
+  const schedule = useCallback((draft) => {
     cancel();
 
     // Reset status from previous save result when new edits arrive
-    if (saveStatus === "saved" || saveStatus === "failed") {
-      setSaveStatus("idle");
-    }
+    setSaveStatus((current) =>
+      current === "saved" || current === "failed" ? "idle" : current,
+    );
 
     debounceTimerRef.current = setTimeout(() => {
       debounceTimerRef.current = null;
       executeSave(draft);
     }, delay);
-  };
+  }, [cancel, delay, executeSave]);
 
   // ── Save immediately (manual save) ─────────────────────────
-  const saveNow = async (draft) => {
+  const saveNow = useCallback(async (draft) => {
     cancel();
     await executeSave(draft);
-  };
+  }, [cancel, executeSave]);
 
   // ── Cleanup on unmount ─────────────────────────────────────
   useEffect(() => {
-    return () => cancel();
-  });
+    onSaveRef.current = onSave;
+  }, [onSave]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      cancel();
+    };
+  }, [cancel]);
 
   return {
     schedule,

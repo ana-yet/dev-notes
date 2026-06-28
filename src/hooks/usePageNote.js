@@ -1,9 +1,54 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import * as NoteRepository from "../repositories/NoteRepository";
-import { subscribe, getActiveTab } from "../services/pageNoteService";
+import { subscribe } from "../services/pageNoteService";
 import logger from "../utils/logger";
 
 const log = logger.create("usePageNote");
+
+function isSupportedPageUrl(url) {
+  if (!url || typeof url !== "string") return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function areTabsEqual(left, right) {
+  if (left === right) return true;
+  if (!left || !right) return false;
+  return (
+    left.id === right.id &&
+    left.windowId === right.windowId &&
+    left.url === right.url &&
+    left.title === right.title &&
+    left.favIconUrl === right.favIconUrl &&
+    left.active === right.active
+  );
+}
+
+function areNotesEqual(left, right) {
+  if (left === right) return true;
+  if (!left || !right) return false;
+
+  const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+  for (const key of keys) {
+    const leftValue = left[key];
+    const rightValue = right[key];
+    if (Array.isArray(leftValue) && Array.isArray(rightValue)) {
+      if (
+        leftValue.length !== rightValue.length ||
+        leftValue.some((value, index) => value !== rightValue[index])
+      ) {
+        return false;
+      }
+    } else if (!Object.is(leftValue, rightValue)) {
+      return false;
+    }
+  }
+  return true;
+}
 
 /**
  * usePageNote — Connects the active browser tab to page notes.
@@ -34,14 +79,6 @@ export function usePageNote(notes = [], options = {}) {
   const lookupSeqRef = useRef(0);
   const activeTabRef = useRef(null);
   const pageNoteRef = useRef(null);
-
-  useEffect(() => {
-    activeTabRef.current = activeTab;
-  }, [activeTab]);
-
-  useEffect(() => {
-    pageNoteRef.current = pageNote;
-  }, [pageNote]);
 
   // ── Find note matching URL ─────────────────────────────────
   const findNote = useCallback(
@@ -75,24 +112,41 @@ export function usePageNote(notes = [], options = {}) {
     };
   }, []);
 
+  const commitPageNote = useCallback((nextNote) => {
+    pageNoteRef.current = nextNote;
+    setPageNote((currentNote) =>
+      areNotesEqual(currentNote, nextNote) ? currentNote : nextNote,
+    );
+  }, []);
+
   // ── Tab change handler ─────────────────────────────────────
   const handleTabChange = useCallback((tab) => {
     if (cancelledRef.current) return;
+
+    const previousTab = activeTabRef.current;
+    if (areTabsEqual(previousTab, tab)) {
+      log.debug("Tab notification ignored because data was unchanged");
+      return;
+    }
+
     log.debug("Tab changed:", tab?.title || "none");
+    activeTabRef.current = tab;
+
+    if (previousTab?.url !== tab?.url) {
+      const isSupported = isSupportedPageUrl(tab?.url);
+      commitPageNote(null);
+      setPageState(
+        isSupported ? "searching" : tab ? "unsupported-page" : "no-page",
+      );
+      setLoading(isSupported);
+    }
+
     setActiveTab(tab);
-  }, []);
+  }, [commitPageNote]);
 
   // ── Subscribe to tab changes on mount ──────────────────────
   useEffect(() => {
     cancelledRef.current = false;
-
-    // Get initial tab
-    getActiveTab().then((tab) => {
-      if (!cancelledRef.current) {
-        setActiveTab(tab);
-      }
-    });
-
     const unsubscribe = subscribe(handleTabChange);
 
     return () => {
@@ -108,19 +162,23 @@ export function usePageNote(notes = [], options = {}) {
     lookupSeqRef.current = seq;
 
     async function resolvePageNote() {
-      if (!activeTab?.url) {
+      if (!isSupportedPageUrl(activeTab?.url)) {
         if (!cancelled) {
-          setPageNote(null);
-          setPageState(activeTab ? "unsupported-page" : "no-page");
-          setLoading(false);
+          commitPageNote(null);
+          setPageState((current) => {
+            const next = activeTab ? "unsupported-page" : "no-page";
+            return current === next ? current : next;
+          });
+          setLoading((current) => (current ? false : current));
         }
         return;
       }
 
-      if (!cancelled) {
-        setLoading(true);
-        setPageState("searching");
-        setPageNote(null);
+      if (!cancelled && pageNoteRef.current?.url !== activeTab.url) {
+        setLoading((current) => (current ? current : true));
+        setPageState((current) =>
+          current === "searching" ? current : "searching",
+        );
       }
 
       // First try in-memory match (instant)
@@ -129,9 +187,11 @@ export function usePageNote(notes = [], options = {}) {
 
       if (localMatch) {
         if (!cancelled) {
-          setPageNote(localMatch);
-          setPageState("existing");
-          setLoading(false);
+          commitPageNote(localMatch);
+          setPageState((current) =>
+            current === "existing" ? current : "existing",
+          );
+          setLoading((current) => (current ? false : current));
         }
         return;
       }
@@ -142,19 +202,24 @@ export function usePageNote(notes = [], options = {}) {
         const { data } = await NoteRepository.getByUrl(activeTab.url);
         if (!cancelled && lookupSeqRef.current === seq) {
           const nextNote = data || createDraft(activeTab);
-          setPageNote(nextNote);
-          setPageState(data ? "existing" : "draft");
+          commitPageNote(nextNote);
+          const nextState = data ? "existing" : "draft";
+          setPageState((current) =>
+            current === nextState ? current : nextState,
+          );
         }
       } catch (err) {
         log.error("getByUrl failed:", err);
         if (!cancelled && lookupSeqRef.current === seq) {
-          setPageNote(createDraft(activeTab));
-          setPageState("draft");
+          commitPageNote(createDraft(activeTab));
+          setPageState((current) =>
+            current === "draft" ? current : "draft",
+          );
         }
       }
 
       if (!cancelled && lookupSeqRef.current === seq) {
-        setLoading(false);
+        setLoading((current) => (current ? false : current));
       }
     }
 
@@ -163,7 +228,7 @@ export function usePageNote(notes = [], options = {}) {
     return () => {
       cancelled = true;
     };
-  }, [activeTab, notes, findNote, createDraft]);
+  }, [activeTab, findNote, createDraft, commitPageNote]);
 
   // ── Persist page note ──────────────────────────────────────
   const savePageNote = useCallback(
@@ -191,6 +256,15 @@ export function usePageNote(notes = [], options = {}) {
       const trimmedTitle = title.trim();
       const finalTitle = trimmedTitle || currentTab.title || currentTab.url;
 
+      if (
+        !currentNote.isDraft &&
+        finalTitle === (currentNote.title || "") &&
+        content === (currentNote.content || "")
+      ) {
+        log.debug("Save skipped because note content did not change");
+        return { data: currentNote, error: null };
+      }
+
       const result = currentNote.isDraft
         ? await NoteRepository.createFromDraft({
             ...currentNote,
@@ -206,12 +280,14 @@ export function usePageNote(notes = [], options = {}) {
 
       if (result.error) return result;
 
-      setPageNote(result.data);
-      setPageState("existing");
+      commitPageNote(result.data);
+      setPageState((current) =>
+        current === "existing" ? current : "existing",
+      );
       await onPersist?.();
       return result;
     },
-    [onPersist],
+    [onPersist, commitPageNote],
   );
 
   return {

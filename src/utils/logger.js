@@ -15,7 +15,7 @@ const PREFIX = '[DevNotes]'
 const LEVELS = { debug: 0, info: 1, warn: 2, error: 3 }
 
 /** Current minimum level — change this to suppress verbose output. */
-let minLevel = LEVELS.debug
+let minLevel = import.meta.env?.DEV ? LEVELS.debug : LEVELS.warn
 
 function shouldLog(level) {
   return LEVELS[level] >= minLevel

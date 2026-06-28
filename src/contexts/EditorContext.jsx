@@ -48,29 +48,31 @@ export function EditorProvider({
   tab,
   onSaveSuccess,
 }) {
-  const [draftTitle, setDraftTitle] = useState("");
-  const [draftContent, setDraftContent] = useState("");
+  const [draftTitle, setDraftTitle] = useState(() => note?.title || "");
+  const [draftContent, setDraftContent] = useState(() => note?.content || "");
+  const [draftNoteId, setDraftNoteId] = useState(() => note?.id);
   const titleRef = useRef(null);
+  const noteId = note?.id;
+  const noteUrl = note?.url;
+  const noteIsDraft = Boolean(note?.isDraft);
 
   // ── Autosave ───────────────────────────────────────────────
-  const autosave = useAutosave({
+  if (draftNoteId !== noteId) {
+    setDraftNoteId(noteId);
+    setDraftTitle(note?.title || "");
+    setDraftContent(note?.content || "");
+  }
+
+  const { schedule, saveNow, cancel, saveStatus } = useAutosave({
     onSave,
     delay: LIMITS.AUTOSAVE_DELAY_MS,
   });
 
-  // ── Sync draft when selected note changes ──────────────────
   useEffect(() => {
-    async function syncDraft() {
-      if (note) {
-        setDraftTitle(note.title || "");
-        setDraftContent(note.content || "");
-        autosave.cancel();
-      }
-    }
-    syncDraft();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [note?.id]);
+    cancel();
+  }, [noteId, cancel]);
 
+  // ── Sync draft when selected note changes ──────────────────
   // ── Dirty state ────────────────────────────────────────────
   const isDirty = useMemo(() => {
     if (!note) return false;
@@ -86,48 +88,61 @@ export function EditorProvider({
   // ── Schedule autosave on draft change ───────────────────────
   useEffect(() => {
     if (isDirty) {
-      autosave.schedule({
-        noteId: note.id,
-        url: note.url,
-        isDraft: Boolean(note.isDraft),
+      schedule({
+        noteId,
+        url: noteUrl,
+        isDraft: noteIsDraft,
         title: draftTitle,
         content: draftContent,
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftTitle, draftContent, isDirty]);
+  }, [
+    draftTitle,
+    draftContent,
+    isDirty,
+    noteId,
+    noteUrl,
+    noteIsDraft,
+    schedule,
+  ]);
 
   // ── Notify parent on successful save ───────────────────────
   useEffect(() => {
-    if (autosave.saveStatus === "saved") {
+    if (saveStatus === "saved") {
       onSaveSuccess?.();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autosave.saveStatus]);
+  }, [saveStatus, onSaveSuccess]);
 
   // ── Focus title after creation ─────────────────────────────
   useEffect(() => {
-    if (autoFocusTitle && note && titleRef.current) {
+    if (autoFocusTitle && noteId && titleRef.current) {
       const timer = setTimeout(() => {
         titleRef.current.focus();
         titleRef.current.select();
       }, 50);
       return () => clearTimeout(timer);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoFocusTitle, note?.id]);
+  }, [autoFocusTitle, noteId]);
 
   // ── Manual save ────────────────────────────────────────────
   const handleManualSave = useCallback(() => {
     if (!isDirty) return;
-    autosave.saveNow({
-      noteId: note.id,
-      url: note.url,
-      isDraft: Boolean(note.isDraft),
+    saveNow({
+      noteId,
+      url: noteUrl,
+      isDraft: noteIsDraft,
       title: draftTitle,
       content: draftContent,
     });
-  }, [isDirty, note, draftTitle, draftContent, autosave]);
+  }, [
+    isDirty,
+    noteId,
+    noteUrl,
+    noteIsDraft,
+    draftTitle,
+    draftContent,
+    saveNow,
+  ]);
 
   // ── Ctrl/Cmd + S ───────────────────────────────────────────
   useEffect(() => {
@@ -171,7 +186,7 @@ export function EditorProvider({
 
       // State
       isDirty,
-      saveStatus: autosave.saveStatus,
+      saveStatus,
 
       // Actions
       onManualSave: handleManualSave,
@@ -190,7 +205,7 @@ export function EditorProvider({
       draftTitle,
       draftContent,
       isDirty,
-      autosave.saveStatus,
+      saveStatus,
       handleManualSave,
       onDelete,
       contextName,

@@ -158,7 +158,6 @@ export default function Library() {
 
   function showToast(message, type = "success") {
     setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
   }
 
   const copyToClipboard = (text, id) => {
@@ -557,6 +556,7 @@ export default function Library() {
           <Toast
             message={toast.message}
             type={toast.type}
+            duration={3000}
             onClose={() => setToast(null)}
           />
         </div>

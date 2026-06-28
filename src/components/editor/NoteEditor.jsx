@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import EditorHeader from './EditorHeader'
 import EditorToolbar from './EditorToolbar'
 import EditorContent from './EditorContent'
@@ -11,7 +12,7 @@ import NoteMetadata from './NoteMetadata'
  * the invariant by rendering EditorPlaceholder when note is null.
  * Child components read from context directly — no prop drilling.
  */
-export default function NoteEditor() {
+function NoteEditor() {
   return (
     <div className="flex flex-col h-full">
       <EditorHeader />
@@ -23,3 +24,5 @@ export default function NoteEditor() {
     </div>
   )
 }
+
+export default memo(NoteEditor)

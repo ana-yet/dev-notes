@@ -23,7 +23,6 @@ export function formatDate(date, style = 'medium') {
 
   return new Intl.DateTimeFormat('en-US', formats[style]).format(d)
 }
-
 /**
  * Formats a time for display.
  *
@@ -63,17 +62,4 @@ export function formatRelativeTime(date) {
 
   // Beyond 30 days, fall back to an absolute date
   return formatDate(d)
-}
-
-/**
- * Checks if a date is today.
- */
-export function isToday(date) {
-  const d = new Date(date)
-  const now = new Date()
-  return (
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate()
-  )
 }

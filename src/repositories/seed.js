@@ -18,7 +18,7 @@
 
 import { getItem, setItem } from '../services/storage'
 import { STORAGE_KEYS } from '../constants'
-import { Note } from '../models'
+import * as Note from '../models/note'
 import logger from '../utils/logger'
 
 const log = logger.create('Seed')

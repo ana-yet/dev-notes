@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import * as NoteRepository from "../repositories/NoteRepository";
 import { seedIfNeeded } from "../repositories/seed";
 
@@ -21,9 +21,15 @@ export function useNotes() {
   const [error, setError] = useState(null);
 
   // Derived: active notes (not in trash)
-  const notes = allNotes.filter((n) => !n.isDeleted);
+  const notes = useMemo(
+    () => allNotes.filter((n) => !n.isDeleted),
+    [allNotes],
+  );
   // Derived: notes in trash
-  const deletedNotes = allNotes.filter((n) => n.isDeleted);
+  const deletedNotes = useMemo(
+    () => allNotes.filter((n) => n.isDeleted),
+    [allNotes],
+  );
 
   /**
    * Loads all notes from the repository.
@@ -85,24 +91,6 @@ export function useNotes() {
     [refresh],
   );
 
-  const archiveNote = useCallback(
-    async (id) => {
-      const { data: note, error: err } = await NoteRepository.archive(id);
-      if (!err) await refresh();
-      return { data: note, error: err };
-    },
-    [refresh],
-  );
-
-  const restoreNote = useCallback(
-    async (id) => {
-      const { data: note, error: err } = await NoteRepository.restore(id);
-      if (!err) await refresh();
-      return { data: note, error: err };
-    },
-    [refresh],
-  );
-
   const restoreFromTrash = useCallback(
     async (id) => {
       const { data: note, error: err } =
@@ -119,30 +107,6 @@ export function useNotes() {
     return { data: count, error: err };
   }, [refresh]);
 
-  const togglePin = useCallback(
-    async (id) => {
-      const note = notes.find((n) => n.id === id);
-      if (!note) return { data: null, error: "Note not found" };
-
-      const { data, error: err } = note.isPinned
-        ? await NoteRepository.unpin(id)
-        : await NoteRepository.pin(id);
-
-      if (!err) await refresh();
-      return { data, error: err };
-    },
-    [notes, refresh],
-  );
-
-  const toggleFavorite = useCallback(
-    async (id) => {
-      const { data, error: err } = await NoteRepository.toggleFavorite(id);
-      if (!err) await refresh();
-      return { data, error: err };
-    },
-    [refresh],
-  );
-
   const searchNotes = useCallback(async (query) => {
     const { data, error: err } = await NoteRepository.search(query);
     return { data, error: err };
@@ -157,12 +121,8 @@ export function useNotes() {
     updateNote,
     deleteNote,
     permanentDeleteNote,
-    archiveNote,
-    restoreNote,
     restoreFromTrash,
     emptyTrash,
-    togglePin,
-    toggleFavorite,
     searchNotes,
     refresh,
   };

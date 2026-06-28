@@ -4,6 +4,8 @@ import {
   useState,
   useEffect,
   useCallback,
+  useMemo,
+  useRef,
 } from "react";
 import { getItem, setItem } from "../services/storage";
 import { STORAGE_KEYS } from "../constants";
@@ -43,6 +45,7 @@ function getSystemTheme() {
 export function ThemeProvider({ children }) {
   const [theme, setThemeState] = useState(DEFAULT_THEME);
   const [loading, setLoading] = useState(true);
+  const themeRef = useRef(DEFAULT_THEME);
 
   // ── Load saved theme on mount ──────────────────────────────────
   useEffect(() => {
@@ -53,6 +56,7 @@ export function ThemeProvider({ children }) {
       if (cancelled) return;
 
       setThemeState(saved);
+      themeRef.current = saved;
       applyTheme(saved === "system" ? getSystemTheme() : saved);
       setLoading(false);
     }
@@ -76,13 +80,20 @@ export function ThemeProvider({ children }) {
 
   // ── Public setter — updates state, storage, and DOM ────────────
   const setTheme = useCallback((next) => {
+    if (themeRef.current === next) return;
+    themeRef.current = next;
     setThemeState(next);
     applyTheme(next === "system" ? getSystemTheme() : next);
     setItem(STORAGE_KEYS.THEME, next);
   }, []);
 
+  const value = useMemo(
+    () => ({ theme, setTheme, loading }),
+    [theme, setTheme, loading],
+  );
+
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, loading }}>
+    <ThemeContext.Provider value={value}>
       {children}
     </ThemeContext.Provider>
   );
